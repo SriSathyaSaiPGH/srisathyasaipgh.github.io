@@ -35,31 +35,36 @@ body.idle, body.idle * { cursor: none !important; }
 .bg.on { opacity: 1; }
 
 /* ---------- Darshan video ---------- */
+/* The video fills one side of the slide from top to bottom, zoomed and cropped around a
+   focus point (set in Settings), and fades into the slide on its inner edge. */
+#stage { --vw: 864px; --feather: 35%; --mx: linear-gradient(to right, #000 calc(100% - var(--feather)), transparent 100%); }
 #video-frame {
-  position: absolute; left: 70px; top: 264px; width: 780px; height: 439px;
-  border-radius: 34px; overflow: hidden; background: transparent;
-  opacity: 0; pointer-events: none;
-  transition: opacity 600ms ease, left 600ms ease, top 600ms ease, width 600ms ease, height 600ms ease;
-  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 7%, #000 93%, transparent 100%), linear-gradient(to bottom, transparent 0, #000 9%, #000 91%, transparent 100%);
+  position: absolute; top: 0; left: 0; width: var(--vw); height: 1080px;
+  overflow: hidden; opacity: 0; pointer-events: none; z-index: 1;
+  transition: opacity 700ms ease;
+  -webkit-mask-image: var(--mx), linear-gradient(to bottom, transparent 0, #000 8%, #000 92%, transparent 100%);
   -webkit-mask-composite: source-in;
-  mask-image: linear-gradient(to right, transparent 0, #000 7%, #000 93%, transparent 100%), linear-gradient(to bottom, transparent 0, #000 9%, #000 91%, transparent 100%);
+  mask-image: var(--mx), linear-gradient(to bottom, transparent 0, #000 8%, #000 92%, transparent 100%);
   mask-composite: intersect;
 }
-#video-frame iframe { width: 100%; height: 100%; border: 0; display: block; }
-#stage.video-left  #video-frame { left: 70px;   opacity: 1; }
-#stage.video-right #video-frame { left: 1070px; opacity: 1; }
-#stage.video-big   #video-frame { left: 210px; top: 118px; width: 1500px; height: 844px; opacity: 1; }
+#video-frame > * { position: absolute; left: 0; top: 0; border: 0; display: block; max-width: none; }
+#stage.vs-left  #video-frame { left: 0; }
+#stage.vs-right #video-frame { left: auto; right: 0; }
+#stage.vs-right { --mx: linear-gradient(to left, #000 calc(100% - var(--feather)), transparent 100%); }
+#stage.vs-big   #video-frame { left: 0; right: auto; width: 1920px; }
+#stage.vs-big   { --mx: radial-gradient(ellipse 75% 80% at 50% 50%, #000 55%, transparent 100%); }
+#stage.video-on #video-frame { opacity: 1; }
 #stage.no-motion #video-frame, #stage.no-motion .bg { transition: none; }
 
 /* ---------- Slide content ---------- */
-#slide { position: absolute; inset: 0; }
+#slide { position: absolute; inset: 0; z-index: 2; }
 .col {
   position: absolute; top: 96px; bottom: 210px;
   display: flex; flex-direction: column; justify-content: center; align-items: center;
   text-align: center;
 }
-.col.right  { left: 900px; width: 950px; }
-.col.left   { left: 70px;  width: 950px; }
+.col.right  { left: calc(var(--vw) * 0.9 + 10px); width: calc(1850px - var(--vw) * 0.9); }
+.col.left   { left: 60px; width: calc(1850px - var(--vw) * 0.9); }
 .col.center { left: 250px;  width: 1420px; }
 .col.full   { top: 70px; bottom: 70px; left: 120px; width: 1680px; }
 
@@ -126,7 +131,7 @@ body.idle, body.idle * { cursor: none !important; }
 
 /* ---------- Next bhajan box ---------- */
 #next-box {
-  position: absolute; right: 56px; bottom: 48px;
+  position: absolute; right: 56px; bottom: 48px; z-index: 4;
   max-width: 660px; min-width: 360px;
   background: rgba(255, 255, 255, 0.82);
   -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
@@ -141,6 +146,15 @@ body.idle, body.idle * { cursor: none !important; }
 #next-box .pitch { font-size: 22px; padding: 1px 14px; }
 
 #blackout { position: absolute; inset: 0; background: #000; z-index: 50; }
+
+/* ---------- Logos ---------- */
+#stage { --logo-h: 110px; }
+.logo { position: absolute; z-index: 6; height: var(--logo-h); width: auto; max-width: calc(var(--logo-h) * 2.6); object-fit: contain; filter: drop-shadow(0 4px 14px rgba(10, 30, 60, 0.25)); }
+.logo.top-left { left: 40px; top: 30px; }
+.logo.top-right { right: 40px; top: 30px; }
+.logo.bottom-left { left: 40px; bottom: 36px; }
+#stage.logo-top .col { top: calc(var(--logo-h) + 54px); }
+#stage.logo-top .col.full { top: calc(var(--logo-h) + 44px); }
 
 /* ---------- Loading & toast ---------- */
 #loading {
@@ -216,6 +230,10 @@ dialog {
   box-shadow: 0 30px 80px -20px rgba(0, 0, 0, 0.6); color: var(--ui-ink);
 }
 dialog::backdrop { background: rgba(8, 18, 32, 0.55); }
+#settings-dialog { margin: auto 24px auto auto; }
+#settings-dialog::backdrop { background: rgba(8, 18, 32, 0.2); }
+input[type=range] { width: 100%; accent-color: var(--ui-accent); }
+.range-value { font-weight: 400; color: var(--ui-muted); }
 dialog form { padding: 24px 26px; display: flex; flex-direction: column; gap: 14px; max-height: 88vh; overflow-y: auto; }
 dialog h2 { margin: 0 0 4px; font-size: 22px; font-weight: 600; }
 dialog p { margin: 0; color: var(--ui-muted); font-size: 15px; line-height: 1.45; }
@@ -231,6 +249,9 @@ textarea { resize: vertical; line-height: 1.45; }
 input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--ui-accent); }
 dialog .row { display: flex; gap: 14px; }
 dialog .row label { flex: 1; }
+dialog label.narrow { flex: 0 0 170px; }
+dialog fieldset { border: 1px solid var(--ui-line); border-radius: 12px; padding: 10px 14px 14px; margin: 4px 0 0; display: flex; flex-direction: column; gap: 10px; }
+dialog legend { font-size: 14.5px; font-weight: 600; padding: 0 6px; }
 .dialog-buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
 .dialog-buttons.spread { justify-content: space-between; flex-wrap: wrap; }
 .dialog-buttons button { border-color: var(--ui-line); }

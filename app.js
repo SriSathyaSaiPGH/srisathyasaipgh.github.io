@@ -6,7 +6,7 @@
 
   const CFG = window.BHAJAN_CONFIG || {};
   const RELAY = (CFG.relayUrl || '').trim();
-  const LS = { state: 'bs.state.v1', deck: 'bs.deck.v1', pin: 'bs.pin.v1' };
+  const LS = { state: 'bs.state.v1', deck: 'bs.deck.v1', pin: 'bs.pin.v1', zoom: 'bs.zoom.v1' };
   const SAI_ORIGIN = 'https://sairhythms.sathyasai.org';
 
   const DEFAULT_SETTINGS = {
@@ -18,9 +18,20 @@
     showMeaning: true,
     showSinger: true,
     titleSlide: true,
+    logo1: 'images/center-logo.png',
+    logo1Pos: 'top-left',
+    logo2: 'images/sssio-100.png',
+    logo2Pos: 'top-right',
+    logoSize: 'medium',
+    videoSide: 'left',
+    videoWidth: 45,     // % of the slide width
+    videoZoom: 130,     // %
+    videoFocusX: 50,    // % across the video to centre on
+    videoFocusY: 40,    // % down the video to centre on
+    videoFeather: 35,   // % of the video area that fades into the slide
   };
 
-  let state = { settings: { ...DEFAULT_SETTINGS }, custom: [], hide: [], unhide: [] };
+  let state = { settings: { ...DEFAULT_SETTINGS }, custom: [], hide: [], unhide: [], edits: {} };
   let deck = null;          // { fetchedAt, raw }
   let model = null;         // normalized deck
   let seq = [];             // every entry incl. hidden (for the editor)
@@ -29,6 +40,7 @@
   let template = null;
   let templates = [];
   let videoForced = true;   // V key toggles for the session
+  let zoom = Number(lsGet(LS.zoom, 1)) || 1;   // text size, kept per laptop (projectors differ)
   let blackout = false;
 
   const $ = (s, r = document) => r.querySelector(s);
@@ -90,11 +102,20 @@
       custom: Array.isArray(s.custom) ? s.custom : [],
       hide: Array.isArray(s.hide) ? s.hide : [],
       unhide: Array.isArray(s.unhide) ? s.unhide : [],
+      edits: s.edits && typeof s.edits === 'object' ? s.edits : {},
     };
   }
 
   let saveTimer = null;
+  function pruneOld() {
+    const now = model && Date.parse(model.date);
+    if (!now) return;
+    const old = d => d && Date.parse(d) && Date.parse(d) < now;
+    state.custom = state.custom.filter(c => !old(c.onlyDate));
+    for (const k of Object.keys(state.edits)) if (old(state.edits[k].onlyDate)) delete state.edits[k];
+  }
   function saveState() {
+    pruneOld();
     lsSet(LS.state, state);
     setEditorStatus(RELAY ? 'Saving…' : 'Saved on this laptop (preview mode).');
     if (!RELAY) return;
@@ -222,13 +243,14 @@
     model = deck ? normalize(deck.raw) : { name: '', date: '', slots: [], items: [] };
     const s = state.settings;
     const gen = [];
-    if (s.titleSlide && model.items.length) gen.push({ key: '__title__', slot: '', title: model.name || 'Devotional session', kind: 'title', date: model.date });
+    if (s.titleSlide && model.items.length) gen.push({ key: '__title__', slot: '', title: model.name || 'Devotional session', kind: 'title', date: model.date, sub: model.date });
     gen.push(...model.items);
+    gen.forEach(applyEdit);
 
     const byAnchor = {};
-    for (const c of state.custom) (byAnchor[c.after] = byAnchor[c.after] || []).push(c);
+    for (const c of activeCustom()) (byAnchor[c.after] = byAnchor[c.after] || []).push(c);
     const keys = new Set(gen.map(g => g.key));
-    const orphans = state.custom.filter(c => c.after !== '__start__' && !keys.has(c.after));
+    const orphans = activeCustom().filter(c => c.after !== '__start__' && !keys.has(c.after));
 
     seq = [];
     (byAnchor.__start__ || []).forEach(c => seq.push({ custom: c }));
@@ -264,6 +286,26 @@
     if (cur >= pages.length) cur = Math.max(0, pages.length - 1);
   }
 
+  // A change made here applies if it was kept for every session, or if it was made for this session's date.
+  function editApplies(e) { return e && (!e.onlyDate || e.onlyDate === (model && model.date)); }
+  function activeCustom() { return state.custom.filter(c => !c.onlyDate || c.onlyDate === (model && model.date)); }
+  const EDIT_FIELDS = ['title', 'sub', 'singer', 'pitch', 'lyrics', 'meaning', 'text'];
+  function applyEdit(it) {
+    const e = state.edits[it.key];
+    it.orig = { title: it.title, sub: it.sub || '', singer: it.singer || '', pitch: it.pitch || '', lyrics: it.lyrics || '', meaning: it.meaning || '', text: it.html ? htmlToText(it.html) : '' };
+    if (!editApplies(e)) { it.edited = false; return; }
+    for (const f of EDIT_FIELDS) if (typeof e[f] === 'string') it[f] = e[f];
+    if (typeof e.text === 'string') { it.html = ''; it.lyrics = e.text; }
+    if (it.kind === 'title') it.date = it.sub;
+    it.edited = true;
+  }
+  function htmlToText(html) {
+    const d = document.createElement('div'); d.innerHTML = html.replace(/<br\s*\/?>/gi, '\n').replace(/<\/(p|div|tr|li|h\d)>/gi, '\n');
+    d.querySelectorAll('td,th').forEach(c => c.append('   '));
+    return (d.textContent || '').replace(/\u00a0/g, ' ').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+  }
+  function effMaxLines() { return Math.max(3, Math.round(state.settings.maxLines / zoom)); }
+
   function splitLines(text, max) {
     const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
     if (lines.length <= max) return [lines];
@@ -295,14 +337,14 @@
       if (c.type === 'image') return { role: 'info', pages: [{ kind: 'image' }] };
       const body = (c.body || '').trim();
       if (!body) return { role: 'card', pages: [{ kind: 'card' }] };
-      if (isProse(body)) return { role: 'info', pages: splitProse(body).map(t => ({ kind: 'prose', text: t })) };
-      return { role: 'lyrics', pages: splitLines(body, s.maxLines).map(l => ({ kind: 'lyrics', lines: l })) };
+      if (isProse(body)) return { role: 'info', pages: splitProse(body, 650 / zoom).map(t => ({ kind: 'prose', text: t })) };
+      return { role: 'lyrics', pages: splitLines(body, effMaxLines()).map(l => ({ kind: 'lyrics', lines: l })) };
     }
     const it = en.item;
     if (it.kind === 'title') return { role: 'title', pages: [{ kind: 'title' }] };
     if (it.html) return { role: 'info', pages: [{ kind: 'html' }] };
-    if (it.lyrics && isProse(it.lyrics)) return { role: 'info', pages: splitProse(it.lyrics).map(t => ({ kind: 'prose', text: t })) };
-    if (it.lyrics) return { role: 'lyrics', pages: splitLines(it.lyrics, s.maxLines).map(l => ({ kind: 'lyrics', lines: l })) };
+    if (it.lyrics && isProse(it.lyrics)) return { role: 'info', pages: splitProse(it.lyrics, 650 / zoom).map(t => ({ kind: 'prose', text: t })) };
+    if (it.lyrics) return { role: 'lyrics', pages: splitLines(it.lyrics, effMaxLines()).map(l => ({ kind: 'lyrics', lines: l })) };
     return { role: 'card', pages: [{ kind: 'card' }] };
   }
 
@@ -367,11 +409,14 @@
     const bg = bgFor(p.role, p.bgIndex);
     setBackground(bg);
     const wantVideo = videoWanted(p);
-    const textSide = bg.text === 'left' ? 'left' : 'right';
+    const vs = videoSettings();
     let colClass = 'center';
-    stage.classList.remove('video-left', 'video-right', 'video-big');
-    if (p.kind === 'darshan') stage.classList.add('video-big');
-    else if (wantVideo) { colClass = textSide; stage.classList.add(textSide === 'left' ? 'video-right' : 'video-left'); }
+    // keep the last geometry while the video fades out, so it doesn't jump
+    const setGeom = g => { stage.classList.remove('vs-left', 'vs-right', 'vs-big'); stage.classList.add(g); };
+    if (p.kind === 'darshan') setGeom('vs-big');
+    else if (wantVideo) { setGeom(vs.videoSide === 'right' ? 'vs-right' : 'vs-left'); colClass = vs.videoSide === 'right' ? 'left' : 'right'; }
+    stage.classList.toggle('video-on', p.kind === 'darshan' || wantVideo);
+    layoutVideo();
     player.setActive(wantVideo);
 
     slideEl.innerHTML = slideHtml(p, colClass);
@@ -416,17 +461,21 @@
     const col = slideEl.querySelector('.col');
     if (!col) return;
     const box = col.querySelector('.panel') || col;
-    let k = 1;
+    let k = zoom;
     stage.style.setProperty('--k', k);
     const over = () => box.scrollHeight > box.clientHeight + 2 || box.scrollHeight > col.clientHeight + 2 || col.scrollHeight > col.clientHeight + 2 || box.scrollWidth > box.clientWidth + 2;
     let guard = 0;
-    while (over() && k > 0.42 && guard++ < 40) { k -= 0.04; stage.style.setProperty('--k', k.toFixed(2)); }
+    const shrink = () => { while (over() && k > 0.42 && guard++ < 60) { k -= 0.04; stage.style.setProperty('--k', k.toFixed(2)); } };
+    shrink();
+    // Zoomed in but no room: the lyrics matter more than the meaning, so drop the meaning and try again.
+    const meaning = col.querySelector('.s-meaning');
+    if (zoom > 1 && meaning && k < zoom - 0.05) { meaning.remove(); k = zoom; guard = 0; stage.style.setProperty('--k', k); shrink(); }
     // Prefer each lyric line on one line: shrink a little more if a line wraps.
     const lines = [...col.querySelectorAll('.s-lyrics > div')];
-    if (!lines.length) return;
+    if (!lines.length || zoom > 1) return; // when the text is zoomed in, bigger matters more than one-line lyrics
     const wraps = () => lines.some(d => d.offsetHeight > parseFloat(getComputedStyle(d).lineHeight) * 1.5);
     guard = 0;
-    while (wraps() && k > 0.74 && guard++ < 20) { k -= 0.03; stage.style.setProperty('--k', k.toFixed(2)); }
+    while (wraps() && k > 0.74 * zoom && guard++ < 30) { k -= 0.03; stage.style.setProperty('--k', k.toFixed(2)); }
   }
 
   function renderNext(p) {
@@ -447,6 +496,21 @@
   }
 
   /* ---------------- YouTube darshan video ---------------- */
+  let videoPreview = null;   // live values while the Settings dialog is open
+  function videoSettings() { return videoPreview || state.settings; }
+  function layoutVideo() {
+    const s = videoSettings();
+    const vw = Math.round(Math.max(25, Math.min(70, +s.videoWidth || 45)) * 19.2);
+    stage.style.setProperty('--vw', vw + 'px');
+    stage.style.setProperty('--feather', Math.max(0, Math.min(70, +s.videoFeather || 0)) + '%');
+    const el = $('#video-frame').firstElementChild; if (!el) return;
+    const W = stage.classList.contains('vs-big') ? 1920 : vw, H = 1080;
+    const base = Math.max(W / 16, H / 9), z = Math.max(1, (+s.videoZoom || 100) / 100);
+    const w = 16 * base * z, h = 9 * base * z;
+    let left = W / 2 - (+s.videoFocusX / 100) * w, top = H / 2 - (+s.videoFocusY / 100) * h;
+    left = Math.min(0, Math.max(W - w, left)); top = Math.min(0, Math.max(H - h, top));
+    Object.assign(el.style, { width: w + 'px', height: h + 'px', left: left + 'px', top: top + 'px' });
+  }
   const player = {
     yt: null, ready: false, clips: [], idx: 0, active: false, apiRequested: false,
     parse(text) {
@@ -484,7 +548,7 @@
         videoId: c.id,
         playerVars: { autoplay: 1, mute: 1, controls: 0, rel: 0, playsinline: 1, iv_load_policy: 3, disablekb: 1, fs: 0, start: c.start || 0, end: c.end, origin: location.origin },
         events: {
-          onReady: () => { this.ready = true; this.yt.mute(); this.yt.playVideo(); },
+          onReady: () => { this.ready = true; this.yt.mute(); this.yt.playVideo(); layoutVideo(); },
           onStateChange: ev => { if (ev.data === YT.PlayerState.ENDED) this.advance(); },
           onError: () => setTimeout(() => this.advance(), 1500),
         },
@@ -507,14 +571,15 @@
     if (en.custom) {
       const c = en.custom;
       const kind = c.type === 'image' ? 'Picture' : c.type === 'darshan' ? 'Darshan video' : 'Text';
-      return { title: c.title || (c.type === 'darshan' ? 'Darshan video' : 'Untitled slide'), sub: `Added here, ${kind.toLowerCase()}${en.orphan ? ' (the slide it followed is gone from the list)' : ''}` };
+      return { title: c.title || (c.type === 'darshan' ? 'Darshan video' : 'Untitled slide'), sub: `Added here, ${kind.toLowerCase()}${c.onlyDate ? ', this session only' : ''}${en.orphan ? ' (the slide it followed is gone from the list)' : ''}` };
     }
     const it = en.item;
-    if (it.key === '__title__') return { title: it.title, sub: 'Title slide' };
+    if (it.key === '__title__') return { title: it.title, sub: it.edited ? 'Title slide, edited here' : 'Title slide' };
     const bits = [];
     if (it.isSong) bits.push(it.singer ? `Bhajan, ${it.singer}` : 'Bhajan'); else bits.push(it.html ? 'Information' : 'Prayer');
     if (it.pitch) bits.push(`pitch ${it.pitch}`);
     if (it.hiddenSR) bits.push('hidden on Sai Rhythms');
+    if (it.edited) bits.push(state.edits[it.key] && state.edits[it.key].onlyDate ? 'edited for this session' : 'edited here');
     return { title: it.title, sub: bits.join(', ') };
   }
   function renderEditor() {
@@ -534,7 +599,8 @@
       const tools = [];
       tools.push(`<button data-r="hide">${en.hidden ? 'Show' : 'Hide'}</button>`);
       tools.push(`<button data-r="add" aria-label="Add a slide after ${esc(title)}">Add after</button>`);
-      if (en.custom) { tools.push(`<button data-r="edit">Edit</button>`); tools.push(`<button data-r="delete" class="danger">Delete</button>`); }
+      tools.push(`<button data-r="edit">Edit</button>`);
+      if (en.custom) tools.push(`<button data-r="delete" class="danger">Delete</button>`);
       li.innerHTML = `<div class="r-main" data-r="goto" title="Show this slide"><div class="r-title">${esc(title)}</div><div class="r-sub">${esc(sub)}</div></div><div class="r-tools">${tools.join('')}</div>`;
       list.appendChild(li);
     });
@@ -551,7 +617,7 @@
     if (act === 'goto') { const pi = pages.findIndex(p => p.en === en); if (pi >= 0) go(pi); else toast('This slide is hidden. Choose Show to include it.'); }
     if (act === 'hide') toggleHidden(en);
     if (act === 'add') openSlideDialog(null, en);
-    if (act === 'edit') openSlideDialog(en.custom);
+    if (act === 'edit') { if (en.custom) openSlideDialog(en.custom); else openItemDialog(en.item); }
     if (act === 'delete') {
       if (!confirm(`Delete “${entryLabel(en).title}”?`)) return;
       state.custom = state.custom.filter(c => c !== en.custom); afterEdit();
@@ -587,6 +653,8 @@
     f.body.value = custom ? (custom.body || '') : '';
     f.image.value = custom ? (custom.image || '') : '';
     f.video.checked = custom ? custom.video !== false : true;
+    f.onlyDate.checked = custom ? !!custom.onlyDate : false;
+    $('#slide-only-date').textContent = model && model.date ? model.date : 'this session';
     syncSlideDialog();
     d.showModal();
   }
@@ -598,7 +666,7 @@
   $('#slide-dialog').addEventListener('close', () => {
     const d = $('#slide-dialog'); if (d.returnValue !== 'save' || !dialogCtx) return;
     const f = $('#slide-form');
-    const data = { type: f.type.value, title: f.title.value.trim(), body: f.body.value.replace(/\s+$/, ''), image: f.image.value.trim(), video: f.video.checked };
+    const data = { type: f.type.value, title: f.title.value.trim(), body: f.body.value.replace(/\s+$/, ''), image: f.image.value.trim(), video: f.video.checked, onlyDate: f.onlyDate.checked && model && model.date ? model.date : '' };
     let target;
     if (dialogCtx.custom) { Object.assign(dialogCtx.custom, data); target = dialogCtx.custom; }
     else {
@@ -619,16 +687,101 @@
     afterEdit(target);
   });
 
+  /* edit a slide that comes from Sai Rhythms (changes are stored as overrides) */
+  let itemCtx = null;
+  function openItemDialog(it) {
+    const d = $('#item-dialog'), f = $('#item-form');
+    itemCtx = it;
+    const e = state.edits[it.key];
+    const has = editApplies(e) ? e : {};
+    const val = fld => typeof has[fld] === 'string' ? has[fld] : it.orig[fld];
+    const show = new Set(['title']);
+    if (it.kind === 'title') show.add('sub');
+    else if (it.orig.text) show.add('text');
+    else {
+      show.add('lyrics');
+      if (it.isSong) { show.add('singer'); show.add('pitch'); }
+      if (it.orig.lyrics || it.isSong) show.add('meaning');
+    }
+    f.querySelectorAll('[data-field]').forEach(l => { l.hidden = !show.has(l.dataset.field); });
+    for (const fld of EDIT_FIELDS) if (f[fld]) f[fld].value = val(fld);
+    f.onlyDate.checked = e ? !!e.onlyDate : !!it.isSong;
+    $('#item-only-date').textContent = model && model.date ? model.date : 'this session';
+    $('#item-dialog-title').textContent = it.kind === 'title' ? 'Edit the title slide' : 'Edit slide';
+    $('#item-reset').hidden = !e;
+    f.dataset.show = [...show].join(' ');
+    d.showModal();
+  }
+  $('#item-dialog').addEventListener('close', () => {
+    const d = $('#item-dialog'), it = itemCtx; itemCtx = null;
+    if (!it || (d.returnValue !== 'save' && d.returnValue !== 'reset')) return;
+    if (d.returnValue === 'reset') { delete state.edits[it.key]; afterEdit(); toast('Back to the Sai Rhythms version.'); return; }
+    const f = $('#item-form'), show = f.dataset.show.split(' '), e = {};
+    const norm = s => String(s || '').replace(/\r/g, '').replace(/[ \t]+$/gm, '').trim();
+    for (const fld of show) if (norm(f[fld].value) !== norm(it.orig[fld])) e[fld] = norm(f[fld].value);
+    if (!Object.keys(e).length) delete state.edits[it.key];
+    else { if (f.onlyDate.checked && model && model.date) e.onlyDate = model.date; state.edits[it.key] = e; }
+    afterEdit();
+  });
+
+  /* ---------------- text size (zoom) ---------------- */
+  function setZoom(z) {
+    const nz = Math.round(Math.max(0.6, Math.min(1.8, z)) * 10) / 10;
+    if (nz === zoom) { toast(nz > 1 ? 'Text is at the largest size.' : 'Text is at the smallest size.', false, 1800); return; }
+    zoom = nz; lsSet(LS.zoom, zoom);
+    const keep = pages[cur] && pages[cur].en, keepPage = pages[cur] ? pages[cur].pageNo : 1;
+    build();
+    const same = en => keep && ((keep.item && en.item && en.item.key === keep.item.key) || (keep.custom && en.custom && en.custom.id === keep.custom.id));
+    const first = pages.findIndex(p => same(p.en));
+    if (first >= 0) { let i = first; while (pages[i + 1] && same(pages[i + 1].en) && pages[i].pageNo < keepPage) i++; cur = i; }
+    render(); if (!$('#editor').hidden) renderEditor();
+    toast(`Text size ${Math.round(zoom * 100)}%`, false, 1500);
+  }
+
+  /* ---------------- logos ---------------- */
+  const LOGO_H = { small: 80, medium: 110, large: 150 };
+  function renderLogos() {
+    const s = state.settings, wrap = $('#logos');
+    wrap.innerHTML = '';
+    stage.style.setProperty('--logo-h', (LOGO_H[s.logoSize] || 110) + 'px');
+    const updateTop = () => stage.classList.toggle('logo-top', !!wrap.querySelector('img.top-left:not([hidden]), img.top-right:not([hidden])'));
+    [[s.logo1, s.logo1Pos], [s.logo2, s.logo2Pos]].forEach(([src, pos]) => {
+      if (!src || !pos || pos === 'off') return;
+      const img = new Image();
+      img.className = 'logo ' + pos; img.alt = '';
+      img.onerror = () => { img.hidden = true; updateTop(); };
+      img.onload = updateTop;
+      img.src = absUrl(src);
+      wrap.appendChild(img);
+    });
+    updateTop();
+  }
+
   /* ---------------- settings ---------------- */
   function openSettings() {
     const f = $('#settings-form'), s = state.settings;
     f.template.innerHTML = templates.map(t => `<option value="${esc(t.id)}">${esc(t.name)}</option>`).join('');
     f.saiUrl.value = s.saiUrl; f.videos.value = s.videos; f.videoOn.value = s.videoOn; f.template.value = s.template;
     f.maxLines.value = s.maxLines; f.showMeaning.checked = s.showMeaning; f.showSinger.checked = s.showSinger; f.titleSlide.checked = s.titleSlide;
+    for (const n of VIDEO_FIELDS) f[n].value = s[n];
+    showRangeValues();
+    f.logo1.value = s.logo1 || ''; f.logo1Pos.value = s.logo1Pos || 'off'; f.logo2.value = s.logo2 || ''; f.logo2Pos.value = s.logo2Pos || 'off'; f.logoSize.value = s.logoSize || 'medium';
     $('#settings-dialog').showModal();
   }
+  const VIDEO_FIELDS = ['videoSide', 'videoWidth', 'videoZoom', 'videoFocusX', 'videoFocusY', 'videoFeather'];
+  function showRangeValues() {
+    document.querySelectorAll('#settings-form [data-show-value]').forEach(o => { const i = $('#settings-form')[o.dataset.showValue]; o.textContent = i.value + '%'; });
+  }
+  $('#settings-form').addEventListener('input', e => {
+    if (!VIDEO_FIELDS.includes(e.target.name)) return;
+    const f = $('#settings-form');
+    videoPreview = { ...state.settings };
+    for (const n of VIDEO_FIELDS) videoPreview[n] = n === 'videoSide' ? f[n].value : +f[n].value;
+    showRangeValues(); render();
+  });
   $('#settings-dialog').addEventListener('close', async () => {
-    if ($('#settings-dialog').returnValue !== 'save') return;
+    videoPreview = null;
+    if ($('#settings-dialog').returnValue !== 'save') { render(); return; }
     const f = $('#settings-form'), s = state.settings;
     const urlChanged = f.saiUrl.value.trim() !== s.saiUrl;
     const tplChanged = f.template.value !== s.template;
@@ -636,8 +789,12 @@
       saiUrl: f.saiUrl.value.trim(), videos: f.videos.value.trim(), videoOn: f.videoOn.value, template: f.template.value,
       maxLines: Math.max(4, Math.min(20, +f.maxLines.value || 10)),
       showMeaning: f.showMeaning.checked, showSinger: f.showSinger.checked, titleSlide: f.titleSlide.checked,
+      videoSide: f.videoSide.value, videoWidth: +f.videoWidth.value, videoZoom: +f.videoZoom.value,
+      videoFocusX: +f.videoFocusX.value, videoFocusY: +f.videoFocusY.value, videoFeather: +f.videoFeather.value,
+      logo1: f.logo1.value.trim(), logo1Pos: f.logo1Pos.value, logo2: f.logo2.value.trim(), logo2Pos: f.logo2Pos.value, logoSize: f.logoSize.value,
     });
     player.configure(s.videos);
+    renderLogos();
     if (tplChanged) { lastBg = ''; await applyTemplate(s.template); }
     if (urlChanged) await loadDeck(true);
     afterEdit();
@@ -659,7 +816,7 @@
       const data = JSON.parse(await file.text());
       if (!data.settings) throw new Error('This file isn’t a slides backup.');
       mergeState(data); $('#settings-dialog').close('cancel');
-      player.configure(state.settings.videos); lastBg = ''; await applyTemplate(state.settings.template); await loadDeck(true);
+      player.configure(state.settings.videos); renderLogos(); lastBg = ''; await applyTemplate(state.settings.template); await loadDeck(true);
       afterEdit(); toast('Backup restored.');
     } catch (err) { toast('Couldn’t restore: ' + err.message, true); }
     e.target.value = '';
@@ -691,7 +848,7 @@
   }
   $('#controls').addEventListener('click', e => {
     const b = e.target.closest('[data-act]'); if (!b) return;
-    ({ prev: () => go(cur - 1), next: () => go(cur + 1), reload, editor: () => toggleEditor(), settings: openSettings, fullscreen })[b.dataset.act]();
+    ({ prev: () => go(cur - 1), next: () => go(cur + 1), reload, editor: () => toggleEditor(), settings: openSettings, fullscreen, smaller: () => setZoom(zoom - 0.1), larger: () => setZoom(zoom + 0.1) })[b.dataset.act]();
   });
   $('#editor').addEventListener('click', e => {
     const b = e.target.closest('[data-act]'); if (!b) return;
@@ -715,6 +872,9 @@
     else if (k === 'f' || k === 'F') fullscreen();
     else if (k === 'b' || k === 'B' || k === '.') { blackout = !blackout; $('#blackout').hidden = !blackout; }
     else if (k === 'v' || k === 'V') { videoForced = !videoForced; render(); toast(videoForced ? 'Darshan video on.' : 'Darshan video off for now.', false, 2000); }
+    else if (k === '+' || k === '=' || k === 'Add') { e.preventDefault(); setZoom(zoom + 0.1); }
+    else if (k === '-' || k === '_' || k === 'Subtract') { e.preventDefault(); setZoom(zoom - 0.1); }
+    else if (k === '0') setZoom(1);
     else if (k === 'Escape') toggleEditor(false);
   });
 
@@ -741,6 +901,7 @@
     await applyTemplate(state.settings.template);
     await loadDeck(false);
     player.configure(state.settings.videos);
+    renderLogos();
     build();
     if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch { } }
     render();

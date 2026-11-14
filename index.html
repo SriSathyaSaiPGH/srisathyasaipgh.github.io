@@ -19,6 +19,7 @@
     <div id="video-frame" aria-hidden="true"><div id="yt-player"></div></div>
     <div id="slide"></div>
     <div id="next-box" hidden></div>
+    <div id="logos"></div>
     <div id="blackout" hidden></div>
   </div>
 </main>
@@ -29,6 +30,9 @@
   <button data-act="prev" aria-label="Previous slide">‹</button>
   <span id="counter">0 / 0</span>
   <button data-act="next" aria-label="Next slide">›</button>
+  <span class="sep"></span>
+  <button data-act="smaller" aria-label="Smaller text" title="Smaller text (−)">A−</button>
+  <button data-act="larger" aria-label="Larger text" title="Larger text (+)">A+</button>
   <span class="sep"></span>
   <button data-act="reload" class="primary">Reload from list</button>
   <button data-act="editor">Edit slides</button>
@@ -71,9 +75,49 @@
       <input name="image" type="url" placeholder="https://… (a .jpg or .png link, or images/your-file.jpg)">
     </label>
     <label class="check" data-for="text image"><input name="video" type="checkbox" checked> Show the darshan video on this slide</label>
+    <label class="check"><input name="onlyDate" type="checkbox"> Only for this session (<span id="slide-only-date"></span>)</label>
     <div class="dialog-buttons">
       <button value="cancel" formnovalidate>Cancel</button>
       <button value="save" class="primary">Save slide</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="item-dialog">
+  <form method="dialog" id="item-form">
+    <h2 id="item-dialog-title">Edit slide</h2>
+    <p>This slide comes from Sai Rhythms. Your changes are kept here, on top of it, and survive every reload.</p>
+    <label data-field="title">Title
+      <input name="title" type="text" maxlength="160">
+    </label>
+    <label data-field="sub">Line under the title
+      <input name="sub" type="text" maxlength="160">
+    </label>
+    <div class="row">
+      <label data-field="singer">Singer
+        <input name="singer" type="text" maxlength="60">
+      </label>
+      <label data-field="pitch">Pitch
+        <input name="pitch" type="text" maxlength="30" placeholder="e.g. 1½ P or C#">
+      </label>
+    </div>
+    <label data-field="lyrics">Words
+      <textarea name="lyrics" rows="9"></textarea>
+    </label>
+    <label data-field="text">Text
+      <textarea name="text" rows="10"></textarea>
+      <small>Saving a change here shows this slide as plain text, without the original's table or pictures.</small>
+    </label>
+    <label data-field="meaning">Meaning
+      <textarea name="meaning" rows="3"></textarea>
+    </label>
+    <label class="check"><input name="onlyDate" type="checkbox"> Only for this session (<span id="item-only-date"></span>)</label>
+    <div class="dialog-buttons spread">
+      <span><button value="reset" id="item-reset" formnovalidate>Use the Sai Rhythms version</button></span>
+      <span>
+        <button value="cancel" formnovalidate>Cancel</button>
+        <button value="save" class="primary">Save changes</button>
+      </span>
     </div>
   </form>
 </dialog>
@@ -96,6 +140,35 @@
         <option value="off">No slides</option>
       </select>
     </label>
+    <fieldset>
+      <legend>Darshan video framing</legend>
+      <small>Open a bhajan slide before Settings to see these changes live.</small>
+      <div class="row">
+        <label class="narrow">Side
+          <select name="videoSide">
+            <option value="left">Left</option>
+            <option value="right">Right</option>
+          </select>
+        </label>
+        <label><span>Width <span class="range-value" data-show-value="videoWidth"></span></span>
+          <input name="videoWidth" type="range" min="30" max="60" step="1">
+        </label>
+      </div>
+      <label><span>Zoom <span class="range-value" data-show-value="videoZoom"></span></span>
+        <input name="videoZoom" type="range" min="100" max="300" step="5">
+      </label>
+      <div class="row">
+        <label><span>Focus left to right <span class="range-value" data-show-value="videoFocusX"></span></span>
+          <input name="videoFocusX" type="range" min="0" max="100" step="1">
+        </label>
+        <label><span>Focus top to bottom <span class="range-value" data-show-value="videoFocusY"></span></span>
+          <input name="videoFocusY" type="range" min="0" max="100" step="1">
+        </label>
+      </div>
+      <label><span>Soft edge <span class="range-value" data-show-value="videoFeather"></span></span>
+        <input name="videoFeather" type="range" min="0" max="70" step="1">
+      </label>
+    </fieldset>
     <label>Design
       <select name="template"></select>
     </label>
@@ -107,6 +180,42 @@
     <label class="check"><input name="showMeaning" type="checkbox"> Show the meaning under each bhajan</label>
     <label class="check"><input name="showSinger" type="checkbox"> Show the singer and pitch under the bhajan title</label>
     <label class="check"><input name="titleSlide" type="checkbox"> Start with a title slide (center name and date)</label>
+    <fieldset>
+      <legend>Logos on every slide</legend>
+      <div class="row">
+        <label>First logo (picture link)
+          <input name="logo1" type="text" placeholder="images/center-logo.png">
+        </label>
+        <label class="narrow">Where
+          <select name="logo1Pos">
+            <option value="top-left">Top left</option>
+            <option value="top-right">Top right</option>
+            <option value="bottom-left">Bottom left</option>
+            <option value="off">Don’t show</option>
+          </select>
+        </label>
+      </div>
+      <div class="row">
+        <label>Second logo (picture link)
+          <input name="logo2" type="text" placeholder="images/sssio-100.png">
+        </label>
+        <label class="narrow">Where
+          <select name="logo2Pos">
+            <option value="top-left">Top left</option>
+            <option value="top-right">Top right</option>
+            <option value="bottom-left">Bottom left</option>
+            <option value="off">Don’t show</option>
+          </select>
+        </label>
+      </div>
+      <label class="narrow">Logo size
+        <select name="logoSize">
+          <option value="small">Small</option>
+          <option value="medium">Medium</option>
+          <option value="large">Large</option>
+        </select>
+      </label>
+    </fieldset>
     <div class="dialog-buttons spread">
       <span>
         <button type="button" data-act="export">Download backup</button>
