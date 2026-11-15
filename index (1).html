@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Devotional Session Slides</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🪔</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link id="template-fonts" rel="stylesheet" href="">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<main id="viewport" aria-live="polite">
+  <div id="stage">
+    <div class="bg" id="bg-a"></div>
+    <div class="bg" id="bg-b"></div>
+    <div id="video-frame" aria-hidden="true"><div id="yt-player"></div></div>
+    <div id="slide"></div>
+    <div id="next-box" hidden></div>
+    <div id="logos"></div>
+    <div id="banner" hidden></div>
+    <div id="clock" hidden></div>
+    <div id="blackout" hidden></div>
+  </div>
+</main>
+
+<div id="loading">Loading the song list…</div>
+
+<nav id="controls" aria-label="Presentation controls">
+  <button data-act="prev" aria-label="Previous slide">‹</button>
+  <span id="counter">0 / 0</span>
+  <button data-act="next" aria-label="Next slide">›</button>
+  <span class="sep"></span>
+  <button data-act="smaller" aria-label="Smaller text" title="Smaller text (−)">A−</button>
+  <button data-act="larger" aria-label="Larger text" title="Larger text (+)">A+</button>
+  <span class="sep"></span>
+  <button data-act="reload" class="primary">Reload from list</button>
+  <button data-act="editor">Edit slides</button>
+  <button data-act="settings">Settings</button>
+  <button data-act="fullscreen">Full screen</button>
+</nav>
+
+<aside id="editor" aria-label="Slide list" hidden>
+  <header>
+    <h2>Slides</h2>
+    <button data-act="close-editor" aria-label="Close slide list">Close</button>
+  </header>
+  <div id="editor-status"></div>
+  <div class="editor-actions">
+    <button data-act="add-start">Add a slide at the start</button>
+  </div>
+  <ol id="slide-list"></ol>
+  <footer>
+    <p>Bhajan and prayer slides come from Sai Rhythms. Change their order or words there, then press <b>Reload from list</b>. Slides you add here stay put through every reload.</p>
+  </footer>
+</aside>
+
+<dialog id="slide-dialog">
+  <form method="dialog" id="slide-form">
+    <h2 id="slide-dialog-title">Add a slide</h2>
+    <label>Type
+      <select name="type">
+        <option value="text">Text</option>
+        <option value="image">Picture</option>
+        <option value="darshan">Darshan video only</option>
+      </select>
+    </label>
+    <label data-for="text image">Title
+      <input name="title" type="text" maxlength="120" placeholder="e.g. Welcome">
+    </label>
+    <label data-for="text">Text
+      <textarea name="body" rows="7" placeholder="Each line here shows as its own line on the slide."></textarea>
+    </label>
+    <label data-for="image">Picture link
+      <input name="image" type="url" placeholder="https://… (a .jpg or .png link, or images/your-file.jpg)">
+    </label>
+    <label class="check" data-for="text image"><input name="video" type="checkbox" checked> Show the darshan video on this slide</label>
+    <label class="check"><input name="onlyDate" type="checkbox"> Only for this session (<span id="slide-only-date"></span>)</label>
+    <div class="dialog-buttons">
+      <button value="cancel" formnovalidate>Cancel</button>
+      <button value="save" class="primary">Save slide</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="item-dialog">
+  <form method="dialog" id="item-form">
+    <h2 id="item-dialog-title">Edit slide</h2>
+    <p>This slide comes from Sai Rhythms. Your changes are kept here, on top of it, and survive every reload.</p>
+    <label data-field="title">Title
+      <input name="title" type="text" maxlength="160">
+    </label>
+    <label data-field="sub">Line under the title
+      <input name="sub" type="text" maxlength="160">
+    </label>
+    <div class="row">
+      <label data-field="singer">Singer
+        <input name="singer" type="text" maxlength="60">
+      </label>
+      <label data-field="pitch">Pitch
+        <input name="pitch" type="text" maxlength="30" placeholder="e.g. 1½ P or C#">
+      </label>
+    </div>
+    <label data-field="lyrics">Words
+      <textarea name="lyrics" rows="9"></textarea>
+    </label>
+    <label data-field="text">Text
+      <textarea name="text" rows="10"></textarea>
+      <small>Saving a change here shows this slide as plain text, without the original's table or pictures.</small>
+    </label>
+    <label data-field="meaning">Meaning
+      <textarea name="meaning" rows="3"></textarea>
+    </label>
+    <label class="check"><input name="onlyDate" type="checkbox"> Only for this session (<span id="item-only-date"></span>)</label>
+    <div class="dialog-buttons spread">
+      <span><button value="reset" id="item-reset" formnovalidate>Use the Sai Rhythms version</button></span>
+      <span>
+        <button value="cancel" formnovalidate>Cancel</button>
+        <button value="save" class="primary">Save changes</button>
+      </span>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="settings-dialog">
+  <form method="dialog" id="settings-form">
+    <h2>Settings</h2>
+    <label>Sai Rhythms published deck link
+      <input name="saiUrl" type="url" required placeholder="https://sairhythms.sathyasai.org/song/slides/…/view">
+    </label>
+    <label>Darshan videos (YouTube links, one per line)
+      <textarea name="videos" rows="4" placeholder="https://www.youtube.com/watch?v=XXXXXXXXXXX 1:20-4:05"></textarea>
+      <small>To use only part of a video, add the start and end time after the link, like <code>1:20-4:05</code>. The clips play muted, one after another, on repeat.</small>
+    </label>
+    <label>Show the darshan video on
+      <select name="videoOn">
+        <option value="lyrics">Bhajans and prayers</option>
+        <option value="songs">Bhajans only</option>
+        <option value="all">Every slide</option>
+        <option value="off">No slides</option>
+      </select>
+    </label>
+    <fieldset>
+      <legend>Darshan video framing</legend>
+      <small>Open a bhajan slide before Settings to see these changes live.</small>
+      <div class="row">
+        <label class="narrow">Side
+          <select name="videoSide">
+            <option value="left">Left</option>
+            <option value="right">Right</option>
+          </select>
+        </label>
+        <label><span>Width <span class="range-value" data-show-value="videoWidth"></span></span>
+          <input name="videoWidth" type="range" min="30" max="60" step="1">
+        </label>
+      </div>
+      <label><span>Zoom <span class="range-value" data-show-value="videoZoom"></span></span>
+        <input name="videoZoom" type="range" min="100" max="300" step="5">
+      </label>
+      <div class="row">
+        <label><span>Focus left to right <span class="range-value" data-show-value="videoFocusX"></span></span>
+          <input name="videoFocusX" type="range" min="0" max="100" step="1">
+        </label>
+        <label><span>Focus top to bottom <span class="range-value" data-show-value="videoFocusY"></span></span>
+          <input name="videoFocusY" type="range" min="0" max="100" step="1">
+        </label>
+      </div>
+      <label><span>Soft edge <span class="range-value" data-show-value="videoFeather"></span></span>
+        <input name="videoFeather" type="range" min="0" max="70" step="1">
+      </label>
+    </fieldset>
+    <label>Design
+      <select name="template"></select>
+    </label>
+    <div class="row">
+      <label>When a bhajan doesn’t fit on one slide
+        <select name="longText">
+          <option value="scroll">Scroll within the slide</option>
+          <option value="split">Continue on the next slide</option>
+        </select>
+      </label>
+      <label class="narrow">Most lines per slide
+        <input name="maxLines" type="number" min="4" max="20">
+        <small>Used when continuing on the next slide.</small>
+      </label>
+    </div>
+    <label class="check"><input name="showMeaning" type="checkbox"> Show the meaning under each bhajan</label>
+    <label class="check"><input name="showSinger" type="checkbox"> Show the singer and pitch under the bhajan title</label>
+    <label class="check"><input name="titleSlide" type="checkbox"> Start with a title slide (center name and date)</label>
+    <label>Text at the top of every slide (for this deck only)
+      <input name="banner" type="text" maxlength="80" placeholder="e.g. Global Akhanda Bhajans 2026">
+    </label>
+    <label class="check"><input name="showClock" type="checkbox"> Show the current time in the bottom left</label>
+    <fieldset>
+      <legend>Logos on every slide</legend>
+      <div class="row">
+        <label>First logo (picture link)
+          <input name="logo1" type="text" placeholder="images/center-logo.png">
+        </label>
+        <label class="narrow">Where
+          <select name="logo1Pos">
+            <option value="top-left">Top left</option>
+            <option value="top-right">Top right</option>
+            <option value="bottom-left">Bottom left</option>
+            <option value="off">Don’t show</option>
+          </select>
+        </label>
+      </div>
+      <div class="row">
+        <label>Second logo (picture link)
+          <input name="logo2" type="text" placeholder="images/sssio-100.png">
+        </label>
+        <label class="narrow">Where
+          <select name="logo2Pos">
+            <option value="top-left">Top left</option>
+            <option value="top-right">Top right</option>
+            <option value="bottom-left">Bottom left</option>
+            <option value="off">Don’t show</option>
+          </select>
+        </label>
+      </div>
+      <label class="narrow">Logo size
+        <select name="logoSize">
+          <option value="small">Small</option>
+          <option value="medium">Medium</option>
+          <option value="large">Large</option>
+        </select>
+      </label>
+    </fieldset>
+    <div class="dialog-buttons spread">
+      <span>
+        <button type="button" data-act="export">Download backup</button>
+        <button type="button" data-act="import">Restore backup</button>
+        <input type="file" id="import-file" accept=".json,application/json" hidden>
+      </span>
+      <span>
+        <button value="cancel" formnovalidate>Cancel</button>
+        <button value="save" class="primary">Save settings</button>
+      </span>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="pin-dialog">
+  <form method="dialog">
+    <h2>Enter the editing PIN</h2>
+    <p>Changes are shared with every laptop, so saving needs the PIN set in the Google Apps Script. This laptop will remember it.</p>
+    <input name="pin" type="password" autocomplete="off" required>
+    <div class="dialog-buttons">
+      <button value="cancel" formnovalidate>Cancel</button>
+      <button value="ok" class="primary">Save changes</button>
+    </div>
+  </form>
+</dialog>
+
+<div id="toast" role="status" hidden></div>
+
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
