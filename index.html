@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link id="template-fonts" rel="stylesheet" href="">
-<link rel="stylesheet" href="app.css?v=2026.11.20-15">
+<link rel="stylesheet" href="app.css?v=2026.11.20-16">
 </head>
 <body>
 
@@ -128,7 +128,7 @@
 
 <dialog id="settings-dialog">
   <form method="dialog" id="settings-form">
-    <h2>Settings <small class="version">version 2026.11.20-15</small></h2>
+    <h2>Settings <small class="version">version 2026.11.20-16</small></h2>
     <label>Sai Rhythms published deck link
       <input name="saiUrl" type="url" required placeholder="https://sairhythms.sathyasai.org/song/slides/…/view">
     </label>
@@ -202,13 +202,20 @@
       <small>Leave a box empty to use the center name and date from Sai Rhythms.</small>
       <label>Or use a picture instead (link)
         <input name="cover" type="text" placeholder="images/akhanda-cover.png">
-        <small>Easiest: upload a picture (for example a slide made in Canva) from the control page (press C). Or upload it to the <code>images</code> folder on GitHub and type its link here. Leave empty to use the title text.</small>
+        <small>For a slide made in Canva: download it as PNG or JPG (1920 × 1080), upload it to the <code>images</code> folder on GitHub, and type its link here, like <code>images/akhanda-cover.png</code>. Leave empty to use the title text.</small>
       </label>
     </fieldset>
     <label>Text at the top of every slide (for this deck only)
       <input name="banner" type="text" maxlength="80" placeholder="e.g. Global Akhanda Bhajans 2026">
     </label>
     <label class="check"><input name="showClock" type="checkbox"> Show the current time in the bottom left</label>
+    <label>Upcoming bhajans box (bottom right)
+      <select name="nextMode">
+        <option value="two">Next and After that</option>
+        <option value="one">Next only</option>
+        <option value="off">Don’t show</option>
+      </select>
+    </label>
     <fieldset>
       <legend>Announcements strip (for this deck only)</legend>
       <label>Announcements, one per line
@@ -292,8 +299,8 @@
 <div id="arrange-bar" hidden>
   <strong>Arrange</strong>
   <span id="arrange-sel"></span>
-  <button data-arrange-size="-0.05" title="Smaller logo (−)">Logo −</button>
-  <button data-arrange-size="0.05" title="Bigger logo (+)">Logo +</button>
+  <button data-arrange-size="-0.05" title="Smaller (−)">Smaller</button>
+  <button data-arrange-size="0.05" title="Bigger (+)">Bigger</button>
   <button data-arrange="reset" id="arrange-reset">Put back</button>
   <span class="sep"></span>
   <button data-arrange="prev" title="Previous slide (Page Up)">‹ Slide</button>
@@ -304,7 +311,7 @@
 
 <div id="toast" role="status" hidden></div>
 
-<script src="config.js?v=2026.11.20-15"></script>
-<script src="app.js?v=2026.11.20-15"></script>
+<script src="config.js?v=2026.11.20-16"></script>
+<script src="app.js?v=2026.11.20-16"></script>
 </body>
 </html>

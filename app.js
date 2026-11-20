@@ -25,6 +25,7 @@
     logo2Pos: 'top-right',
     logoSize: 'medium',
     showClock: true,
+    nextMode: 'two',    // Next box: 'two' (Next + After that), 'one' (Next only), 'off'
     layouts: {},        // per design: positions/sizes people dragged in "Arrange" mode
     videoSide: 'left',
     videoWidth: 45,     // % of the slide width
@@ -603,11 +604,12 @@
   function renderNext(p) {
     const it = p.en.item;
     const nx = p.next;
-    const show = nx && (nx.isSong || (it && it.isSong));
+    const mode = state.settings.nextMode || 'two';
+    const show = mode !== 'off' && nx && (nx.isSong || (it && it.isSong));
     if (!show || p.kind === 'title') { nextBox.hidden = true; return; }
     const meta = x => x.isSong && (x.singer || x.pitch)
       ? `<div class="nb-meta">${x.singer ? `<span>${esc(x.singer)}</span>` : ''}${x.pitch ? `<span class="pitch">${esc(x.pitch)}</span>` : ''}</div>` : '';
-    const n2 = p.next2;
+    const n2 = mode === 'two' ? p.next2 : null;
     const after = n2 ? `<div class="nb-after"><div class="nb-label">After that</div><div class="nb-title">${esc(n2.title)}</div>${meta(n2)}</div>` : '';
     nextBox.innerHTML = `<div class="nb-label">Next</div><div class="nb-title">${esc(nx.title)}</div>${meta(nx)}${after}`;
     nextBox.hidden = false;
@@ -868,29 +870,8 @@
   });
 
   /* title slide: text and optional picture */
-  // A picture is either a link (images/cover.png, https://…) or "drive:ID" for one uploaded from the control page.
-  const imgCache = {};
-  function coverSrc(v) {
-    if (!v.startsWith('drive:')) return absUrl(v);
-    const id = v.slice(6);
-    if (imgCache[id]) return imgCache[id];
-    const saved = lsGet('bs.img.' + id, '');
-    if (saved) return (imgCache[id] = saved);
-    fetchDriveImage(id);
-    return '';   // show the text title until the picture arrives
-  }
-  const imgLoading = new Set();
-  async function fetchDriveImage(id) {
-    if (!RELAY || imgLoading.has(id)) return;
-    imgLoading.add(id);
-    try {
-      const d = await relayGet({ action: 'image', id });
-      imgCache[id] = `data:${d.mime || 'image/jpeg'};base64,${d.data}`;
-      lsSet('bs.img.' + id, imgCache[id]);   // keep a copy so it shows instantly next time
-      if (pages[cur] && pages[cur].kind === 'title') render();
-    } catch (e) { toast('The title picture couldn’t be loaded: ' + e.message, true, 8000); }
-    imgLoading.delete(id);
-  }
+  // The title picture is a link: a file in the site's images folder (images/cover.png) or a web address.
+  function coverSrc(v) { return v ? absUrl(v) : ''; }
   function titleOrig() { return { title: (model && model.name) || 'Devotional session', sub: (model && model.date) || '' }; }
   function titleSlideInfo() {
     const e = state.edits.__title__ || {}, o = titleOrig();
@@ -1029,11 +1010,12 @@
     selKey = null; updateArrangeBar(); applyLayout(); broadcastStatus();
   }
   function updateArrangeBar() {
-    $('#arrange-sel').textContent = selKey ? `Selected: ${ARRANGE_LABEL[selKey]}` : 'Drag the text or a logo to move it.';
+    $('#arrange-sel').textContent = selKey ? `Selected: ${ARRANGE_LABEL[selKey]}` : 'Click an item to select it, drag to move.';
     $('#arrange-reset').disabled = !selKey;
-    document.querySelectorAll('[data-arrange-size]').forEach(b => { b.disabled = !selKey || !/^logo/.test(selKey); });
+    document.querySelectorAll('[data-arrange-size]').forEach(b => { b.disabled = !selKey; });
   }
   function nudge(key, dx, dy, ds) {
+    queueMicrotask(broadcastStatus);
     const L = layoutFor(), o = L[key] || (L[key] = { dx: 0, dy: 0, s: 1 });
     o.dx = Math.round((o.dx || 0) + dx); o.dy = Math.round((o.dy || 0) + dy);
     if (ds) o.s = Math.max(0.4, Math.min(3, Math.round(((o.s || 1) + ds) * 100) / 100));
@@ -1047,7 +1029,7 @@
     const el = e.target.closest('[data-arrange-key].movable');
     if (!el) { selKey = null; updateArrangeBar(); applyLayout(); return; }
     e.preventDefault();
-    selKey = el.dataset.arrangeKey; updateArrangeBar(); applyLayout();
+    selKey = el.dataset.arrangeKey; updateArrangeBar(); applyLayout(); broadcastStatus();
     const o = layoutFor()[selKey] || {};
     drag = { key: selKey, x: e.clientX, y: e.clientY, dx: o.dx || 0, dy: o.dy || 0 };
     stage.setPointerCapture(e.pointerId);
@@ -1059,11 +1041,11 @@
     o.dy = Math.round(drag.dy + (e.clientY - drag.y) / stageScale);
     applyLayout();
   });
-  stage.addEventListener('pointerup', () => { if (drag) { drag = null; saveArrange(); } });
+  stage.addEventListener('pointerup', () => { if (drag) { drag = null; saveArrange(); broadcastStatus(); } });
   stage.addEventListener('wheel', e => {
     if (!arranging) return;
     const el = e.target.closest('[data-arrange-key].movable');
-    if (!el || !/^logo/.test(el.dataset.arrangeKey)) return;
+    if (!el) return;
     e.preventDefault(); selKey = el.dataset.arrangeKey; updateArrangeBar();
     nudge(selKey, 0, 0, e.deltaY < 0 ? 0.05 : -0.05); saveArrange();
   }, { passive: false });
@@ -1075,8 +1057,8 @@
     if (!selKey) return ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' '].includes(k);
     const moves = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
     if (moves[k]) { nudge(selKey, ...moves[k]); saveArrange(); return true; }
-    if ((k === '+' || k === '=') && /^logo/.test(selKey)) { nudge(selKey, 0, 0, 0.05); saveArrange(); return true; }
-    if ((k === '-' || k === '_') && /^logo/.test(selKey)) { nudge(selKey, 0, 0, -0.05); saveArrange(); return true; }
+    if (k === '+' || k === '=') { nudge(selKey, 0, 0, 0.05); saveArrange(); return true; }
+    if (k === '-' || k === '_') { nudge(selKey, 0, 0, -0.05); saveArrange(); return true; }
     return false;
   }
   $('#arrange-bar').addEventListener('click', e => {
@@ -1118,7 +1100,7 @@
     f.saiUrl.value = s.saiUrl; f.videos.value = s.videos; f.videoOn.value = s.videoOn; f.template.value = s.template;
     f.maxLines.value = s.maxLines; f.longText.value = s.longText || 'scroll'; f.showMeaning.checked = s.showMeaning; f.showSinger.checked = s.showSinger; f.titleSlide.checked = s.titleSlide;
     for (const n of VIDEO_FIELDS) f[n].value = s[n];
-    f.banner.value = state.banner || ''; f.showClock.checked = !!s.showClock;
+    f.banner.value = state.banner || ''; f.showClock.checked = !!s.showClock; f.nextMode.value = s.nextMode || 'two';
     { const t = titleSlideInfo(); f.titleText.value = t.title; f.titleText.placeholder = t.origTitle; f.titleSub.value = t.sub; f.titleSub.placeholder = t.origSub || 'Line under the title'; f.cover.value = t.cover; }
     f.tickerText.value = (state.ticker && state.ticker.text) || ''; f.tickerOn.checked = !!(state.ticker && state.ticker.on); f.tickerSpeed.value = (state.ticker && state.ticker.speed) || 'slow';
     showRangeValues();
@@ -1154,7 +1136,7 @@
     const titleTouched = typedTitle.title !== titleBefore.title || typedTitle.sub !== titleBefore.sub || typedTitle.cover !== titleBefore.cover;
     if (!urlChanged || titleTouched) setTitleSlide(typedTitle);
     Object.assign(s, {
-      showClock: f.showClock.checked,
+      showClock: f.showClock.checked, nextMode: f.nextMode.value,
       videos: f.videos.value.trim(), videoOn: f.videoOn.value, template: f.template.value,
       maxLines: Math.max(4, Math.min(20, +f.maxLines.value || 10)), longText: f.longText.value,
       showMeaning: f.showMeaning.checked, showSinger: f.showSinger.checked, titleSlide: f.titleSlide.checked,
@@ -1308,6 +1290,8 @@
       deck: model ? { name: model.name, date: model.date } : null, saiUrl: state.settings.saiUrl,
       banner: state.banner || '', ticker: cleanTicker(state.ticker), titleSlide: titleSlideInfo(), list: slideListForControl(),
       settings: { ...state.settings, layouts: undefined }, templates: templates.map(t => ({ id: t.id, name: t.name })), arranging,
+      arrangeKeys: arranging ? movables().map(([k]) => ({ key: k, label: ARRANGE_LABEL[k] })) : [], selKey,
+      arrangeSel: arranging && selKey ? (layoutFor()[selKey] || { dx: 0, dy: 0, s: 1 }) : null,
       relay: !!RELAY, hasPin: !!lsGet(LS.pin, ''), saveNote: lastSaveNote,
     });
   }
@@ -1338,6 +1322,13 @@
       case 'videoPreview': videoPreview = { ...state.settings, ...cleanSettings(m.settings || {}) }; render(); break;
       case 'videoPreviewEnd': videoPreview = null; render(); break;
       case 'arrange': setArrange(m.on ?? !arranging); break;
+      case 'arrangeSelect': if (arranging) { selKey = m.key || null; updateArrangeBar(); applyLayout(); } break;
+      case 'arrangeMove': if (arranging && selKey) { nudge(selKey, +m.dx || 0, +m.dy || 0, +m.ds || 0); saveArrange(); } break;
+      case 'arrangeReset':
+        if (!arranging) break;
+        if (m.all) state.settings.layouts[template.id] = {}; else if (selKey) delete layoutFor()[selKey];
+        applyLayout(); saveArrange(); break;
+      case 'arrangeSlide': if (arranging) { go(cur + (m.dir > 0 ? 1 : -1)); applyLayout(); } break;
       case 'titleSlide': setTitleSlide(m.titleSlide || {}); afterEditNoSave(); saveState(true); break;
       case 'pin': lsSet(LS.pin, String(m.pin || '')); lastSaveNote = 'Sharing…'; saveState(true); break;
     }
