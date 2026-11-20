@@ -24,6 +24,7 @@
     logo2: 'images/sssio-100.png',
     logo2Pos: 'top-right',
     logoSize: 'medium',
+    logoBacking: 'design',   // soft glass behind the logos: 'design' (as the design suggests), 'on', 'off'
     showClock: true,
     nextMode: 'two',    // Next box: 'two' (Next + After that), 'one' (Next only), 'off'
     layouts: {},        // per design: positions/sizes people dragged in "Arrange" mode
@@ -456,6 +457,7 @@
     stage.style.setProperty('--title-font', template.titleFont || "Georgia, serif");
     stage.style.setProperty('--body-font', template.bodyFont || "'Segoe UI', Arial, sans-serif");
     currentTone = ''; setTone(template.defaultTone || 'light');
+    if ($('#logos')) renderLogos();   // the design may ask for a backing behind the logos
     // preload images
     Object.values(template.backgrounds || {}).flat().forEach(b => { if (b.src) { const i = new Image(); i.src = (template.base || `templates/${tid}/`) + b.src; } });
   }
@@ -954,7 +956,7 @@
     [[s.logo1, s.logo1Pos, 'logo1'], [s.logo2, s.logo2Pos, 'logo2']].forEach(([src, pos, key]) => {
       if (!src || !pos || pos === 'off') return;
       const img = new Image();
-      img.className = 'logo ' + pos; img.alt = ''; img.dataset.key = key; img.draggable = false;
+      img.className = 'logo ' + pos + (logoBacked() ? ' backed' : ''); img.alt = ''; img.dataset.key = key; img.draggable = false;
       img.onerror = () => { img.hidden = true; updateTop(); };
       img.onload = updateTop;
       img.src = absUrl(src);
@@ -962,6 +964,11 @@
     });
     updateTop();
     applyLayout();
+  }
+
+  function logoBacked() {
+    const b = state.settings.logoBacking || 'design';
+    return b === 'on' || (b === 'design' && !!(template && template.logoBacking));
   }
 
   /* ---------------- arranging text and logos ---------------- */
@@ -991,10 +998,16 @@
     if (tk && col) out.push([tk, col]);
     return out;
   }
+  // A design can suggest where things go ("layout" in its design file); what people arrange themselves wins.
+  function placeOf(key) {
+    const own = layoutFor()[key];
+    if (own) return own;
+    const d = template && template.layout && template.layout[key];
+    return d ? { dx: d.dx || 0, dy: d.dy || 0, s: d.s || 1 } : { dx: 0, dy: 0, s: 1 };
+  }
   function applyLayout() {
-    const L = layoutFor();
     for (const [key, el] of movables()) {
-      const o = L[key] || {};
+      const o = placeOf(key);
       el.style.translate = (o.dx || o.dy) ? `${o.dx || 0}px ${o.dy || 0}px` : '';
       el.style.scale = o.s && o.s !== 1 ? String(o.s) : '';
       el.classList.toggle('movable', arranging);
@@ -1016,7 +1029,7 @@
   }
   function nudge(key, dx, dy, ds) {
     queueMicrotask(broadcastStatus);
-    const L = layoutFor(), o = L[key] || (L[key] = { dx: 0, dy: 0, s: 1 });
+    const L = layoutFor(), o = L[key] || (L[key] = { ...placeOf(key) });
     o.dx = Math.round((o.dx || 0) + dx); o.dy = Math.round((o.dy || 0) + dy);
     if (ds) o.s = Math.max(0.4, Math.min(3, Math.round(((o.s || 1) + ds) * 100) / 100));
     applyLayout();
@@ -1030,13 +1043,13 @@
     if (!el) { selKey = null; updateArrangeBar(); applyLayout(); return; }
     e.preventDefault();
     selKey = el.dataset.arrangeKey; updateArrangeBar(); applyLayout(); broadcastStatus();
-    const o = layoutFor()[selKey] || {};
+    const o = placeOf(selKey);
     drag = { key: selKey, x: e.clientX, y: e.clientY, dx: o.dx || 0, dy: o.dy || 0 };
     stage.setPointerCapture(e.pointerId);
   });
   stage.addEventListener('pointermove', e => {
     if (!drag) return;
-    const L = layoutFor(), o = L[drag.key] || (L[drag.key] = { dx: 0, dy: 0, s: 1 });
+    const L = layoutFor(), o = L[drag.key] || (L[drag.key] = { ...placeOf(drag.key) });
     o.dx = Math.round(drag.dx + (e.clientX - drag.x) / stageScale);
     o.dy = Math.round(drag.dy + (e.clientY - drag.y) / stageScale);
     applyLayout();
@@ -1104,7 +1117,7 @@
     { const t = titleSlideInfo(); f.titleText.value = t.title; f.titleText.placeholder = t.origTitle; f.titleSub.value = t.sub; f.titleSub.placeholder = t.origSub || 'Line under the title'; f.cover.value = t.cover; }
     f.tickerText.value = (state.ticker && state.ticker.text) || ''; f.tickerOn.checked = !!(state.ticker && state.ticker.on); f.tickerSpeed.value = (state.ticker && state.ticker.speed) || 'slow';
     showRangeValues();
-    f.logo1.value = s.logo1 || ''; f.logo1Pos.value = s.logo1Pos || 'off'; f.logo2.value = s.logo2 || ''; f.logo2Pos.value = s.logo2Pos || 'off'; f.logoSize.value = s.logoSize || 'medium';
+    f.logo1.value = s.logo1 || ''; f.logo1Pos.value = s.logo1Pos || 'off'; f.logo2.value = s.logo2 || ''; f.logo2Pos.value = s.logo2Pos || 'off'; f.logoSize.value = s.logoSize || 'medium'; f.logoBacking.value = s.logoBacking || 'design';
     $('#settings-dialog').showModal();
   }
   const VIDEO_FIELDS = ['videoSide', 'videoWidth', 'videoZoom', 'videoFocusX', 'videoFocusY', 'videoFeather'];
@@ -1142,7 +1155,7 @@
       showMeaning: f.showMeaning.checked, showSinger: f.showSinger.checked, titleSlide: f.titleSlide.checked,
       videoSide: f.videoSide.value, videoWidth: +f.videoWidth.value, videoZoom: +f.videoZoom.value,
       videoFocusX: +f.videoFocusX.value, videoFocusY: +f.videoFocusY.value, videoFeather: +f.videoFeather.value,
-      logo1: f.logo1.value.trim(), logo1Pos: f.logo1Pos.value, logo2: f.logo2.value.trim(), logo2Pos: f.logo2Pos.value, logoSize: f.logoSize.value,
+      logo1: f.logo1.value.trim(), logo1Pos: f.logo1Pos.value, logo2: f.logo2.value.trim(), logo2Pos: f.logo2Pos.value, logoSize: f.logoSize.value, logoBacking: f.logoBacking.value,
     });
     player.configure(s.videos);
     renderLogos(); renderOverlays();
@@ -1291,7 +1304,7 @@
       banner: state.banner || '', ticker: cleanTicker(state.ticker), titleSlide: titleSlideInfo(), list: slideListForControl(),
       settings: { ...state.settings, layouts: undefined }, templates: templates.map(t => ({ id: t.id, name: t.name })), arranging,
       arrangeKeys: arranging ? movables().map(([k]) => ({ key: k, label: ARRANGE_LABEL[k] })) : [], selKey,
-      arrangeSel: arranging && selKey ? (layoutFor()[selKey] || { dx: 0, dy: 0, s: 1 }) : null,
+      arrangeSel: arranging && selKey ? placeOf(selKey) : null,
       relay: !!RELAY, hasPin: !!lsGet(LS.pin, ''), saveNote: lastSaveNote,
     });
   }

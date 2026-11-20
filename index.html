@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link id="template-fonts" rel="stylesheet" href="">
-<link rel="stylesheet" href="app.css?v=2026.11.20-16">
+<link rel="stylesheet" href="app.css?v=2026.11.20-17">
 </head>
 <body>
 
@@ -128,7 +128,7 @@
 
 <dialog id="settings-dialog">
   <form method="dialog" id="settings-form">
-    <h2>Settings <small class="version">version 2026.11.20-16</small></h2>
+    <h2>Settings <small class="version">version 2026.11.20-17</small></h2>
     <label>Sai Rhythms published deck link
       <input name="saiUrl" type="url" required placeholder="https://sairhythms.sathyasai.org/song/slides/…/view">
     </label>
@@ -261,7 +261,14 @@
           </select>
         </label>
       </div>
-      <button type="button" data-act="arrange">Arrange text and logos on the slides…</button>
+      <label>Behind the logos
+        <select name="logoBacking">
+          <option value="design">As the design suggests</option>
+          <option value="on">A soft backing (helps on busy corners)</option>
+          <option value="off">Nothing</option>
+        </select>
+      </label>
+          <button type="button" data-act="arrange">Arrange text and logos on the slides…</button>
       <label class="narrow">Logo size
         <select name="logoSize">
           <option value="small">Small</option>
@@ -311,7 +318,7 @@
 
 <div id="toast" role="status" hidden></div>
 
-<script src="config.js?v=2026.11.20-16"></script>
-<script src="app.js?v=2026.11.20-16"></script>
+<script src="config.js?v=2026.11.20-17"></script>
+<script src="app.js?v=2026.11.20-17"></script>
 </body>
 </html>
