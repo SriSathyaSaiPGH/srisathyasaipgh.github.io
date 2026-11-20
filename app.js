@@ -36,7 +36,7 @@
     videoFeather: 35,   // % of the video area that fades into the slide
   };
 
-  let state = { settings: { ...DEFAULT_SETTINGS }, decks: {}, custom: [], hide: [], unhide: [], edits: {}, banner: '', ticker: { text: '', on: false, speed: 'slow' } };
+  let state = { settings: { ...DEFAULT_SETTINGS }, decks: {}, custom: [], hide: [], unhide: [], edits: {}, banner: '', ticker: { text: '', on: false, speed: 'slow' }, photo: { on: false, file: '', mode: 'same', seed: 1, pins: {} } };
   let loadError = '';
   let deck = null;          // { fetchedAt, raw }
   let model = null;         // normalized deck
@@ -109,6 +109,19 @@
     t = t && typeof t === 'object' ? t : {};
     return { text: typeof t.text === 'string' ? t.text : '', on: !!t.on, speed: ['slow', 'medium', 'fast'].includes(t.speed) ? t.speed : 'slow' };
   }
+  const PHOTO_FILE = /^[\w.-]+\.(jpe?g|png|webp)$/i;
+  function cleanPhoto(p) {
+    p = p && typeof p === 'object' ? p : {};
+    const pins = {};
+    if (p.pins && typeof p.pins === 'object') for (const [k, v] of Object.entries(p.pins)) if (typeof v === 'string' && PHOTO_FILE.test(v)) pins[k] = v;
+    return {
+      on: !!p.on,
+      file: typeof p.file === 'string' && PHOTO_FILE.test(p.file) ? p.file : '',
+      mode: p.mode === 'each' ? 'each' : 'same',          // same photo on every slide, or a different one per slide
+      seed: Number.isFinite(+p.seed) ? +p.seed : 1,       // which shuffle of the photos "each" uses
+      pins,                                               // photos chosen by hand for particular slides
+    };
+  }
   function cleanDeckData(d) {
     d = d || {};
     return {
@@ -119,6 +132,7 @@
       banner: typeof d.banner === 'string' ? d.banner : '',
       ticker: cleanTicker(d.ticker),
       cover: typeof d.cover === 'string' ? d.cover : '',
+      photo: cleanPhoto(d.photo),
     };
   }
   function mergeState(s) {
@@ -129,7 +143,7 @@
     state = { settings, decks, ...cleanDeckData(decks[deckKey(settings.saiUrl)]) };
   }
   function stashDeckData() {
-    state.decks[deckKey(state.settings.saiUrl)] = { custom: state.custom, hide: state.hide, unhide: state.unhide, edits: state.edits, banner: state.banner, ticker: state.ticker, cover: state.cover };
+    state.decks[deckKey(state.settings.saiUrl)] = { custom: state.custom, hide: state.hide, unhide: state.unhide, edits: state.edits, banner: state.banner, ticker: state.ticker, cover: state.cover, photo: state.photo };
   }
   function switchDeck(newUrl) {
     stashDeckData();
@@ -323,7 +337,7 @@
       const ahead = [];
       for (let j = vi + 1; j < visible.length && ahead.length < 2; j++) { if (visible[j].item && visible[j].item.key !== '__title__') ahead.push(visible[j].item); }
       const [next = null, next2 = null] = ahead;
-      kinds.pages.forEach((p, pi) => pages.push({ en, ...p, role, bgIndex, pageNo: pi + 1, pageCount: kinds.pages.length, next, next2 }));
+      kinds.pages.forEach((p, pi) => pages.push({ en, ...p, role, bgIndex, vi, pageNo: pi + 1, pageCount: kinds.pages.length, next, next2 }));
     });
     if (cur >= pages.length) cur = Math.max(0, pages.length - 1);
   }
@@ -527,12 +541,14 @@
     const setGeom = g => { stage.classList.remove('vs-left', 'vs-right', 'vs-big'); stage.classList.add(g); };
     if (p.kind === 'darshan') setGeom('vs-big');
     else if (wantVideo) { setGeom(vs.videoSide === 'right' ? 'vs-right' : 'vs-left'); colClass = vs.videoSide === 'right' ? 'left' : 'right'; }
+    else if (photoVisible(p)) colClass = vs.videoSide === 'right' ? 'left' : 'right';   // make room for Swami's photo
     stage.classList.toggle('video-on', p.kind === 'darshan' || wantVideo);
     stage.classList.toggle('is-title', p.kind === 'title');                 // no top text on the title slide
     stage.classList.toggle('is-cover', p.kind === 'title' && !!state.cover && !!coverSrc(state.cover)); // a full picture replaces the title slide
     layoutVideo();
     player.setActive(wantVideo);
 
+    renderPhoto(p);
     slideEl.innerHTML = slideHtml(p, colClass);
     fitText();
     renderNext(p);
@@ -562,9 +578,9 @@
         return `<div class="col ${colClass === 'center' ? 'full' : colClass} has-image">${title ? `<h1 class="s-title">${esc(title)}</h1>` : ''}${src ? `<img class="s-image" src="${esc(src)}" alt="${esc(title)}">` : '<div class="s-meaning">Add a picture link to this slide in Edit slides.</div>'}</div>`;
       }
       case 'html':
-        return `<div class="col center"><div class="panel"><h1 class="s-title">${esc(title)}</h1><div class="s-rule"></div><div class="s-html scroller">${it.html}</div></div></div>`;
+        return `<div class="col ${colClass}"><div class="panel"><h1 class="s-title">${esc(title)}</h1><div class="s-rule"></div><div class="s-html scroller">${it.html}</div></div></div>`;
       case 'prose':
-        return `<div class="col center"><div class="panel"><h1 class="s-title">${esc(title)}</h1><div class="s-rule"></div><div class="s-prose scroller">${p.text.split(/\n+/).map(t => `<p>${esc(t)}</p>`).join('')}</div>${pageNote}</div></div>`;
+        return `<div class="col ${colClass}"><div class="panel"><h1 class="s-title">${esc(title)}</h1><div class="s-rule"></div><div class="s-prose scroller">${p.text.split(/\n+/).map(t => `<p>${esc(t)}</p>`).join('')}</div>${pageNote}</div></div>`;
       case 'lyrics': {
         const meaning = it && state.settings.showMeaning && it.meaning && p.pageNo === p.pageCount ? `<div class="s-meaning">${esc(it.meaning)}</div>` : '';
         return `<div class="col ${colClass}"><div class="panel"><h1 class="s-title">${esc(title)}</h1>${leadHtml(it)}<div class="s-rule"></div><div class="s-lyrics scroller">${p.lines.map(l => `<div>${esc(l)}</div>`).join('')}</div>${meaning}${pageNote}</div></div>`;
@@ -971,9 +987,89 @@
     return b === 'on' || (b === 'design' && !!(template && template.logoBacking));
   }
 
+  /* ---------------- Swami's photo ---------------- */
+  // Photos live in the "photos" folder on GitHub, listed in photos/index.json.
+  let photoList = null;
+  async function loadPhotos() {
+    if (photoList) return photoList;
+    try {
+      const d = await (await fetch('photos/index.json', { cache: 'no-store' })).json();
+      photoList = (d.photos || []).map(p => p.file).filter(Boolean);
+    } catch { photoList = []; }
+    return photoList;
+  }
+  const entryKeyOf = en => en ? (en.item ? 'i:' + en.item.key : 'c:' + en.custom.id) : '';
+  let shuffleCache = { sig: '', list: [] };
+  function shuffled(list, seed) {
+    const sig = seed + '|' + list.length;
+    if (shuffleCache.sig === sig) return shuffleCache.list;
+    let a = seed >>> 0 || 1;
+    const rnd = () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+    const out = list.slice();
+    for (let i = out.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [out[i], out[j]] = [out[j], out[i]]; }
+    shuffleCache = { sig, list: out };
+    return out;
+  }
+  // Which photo a slide shows ('' = none).
+  function photoFor(p) {
+    const ph = state.photo || {};
+    if (!ph.on || !p || p.kind === 'title' || p.kind === 'darshan') return '';
+    if (ph.mode !== 'each') return ph.file || '';
+    const pin = (ph.pins || {})[entryKeyOf(p.en)];
+    if (pin) return pin;
+    if (!photoList) { loadPhotos().then(() => render()); return ''; }
+    if (!photoList.length) return '';
+    const order = shuffled(photoList, ph.seed || 1);
+    return order[(p.vi || 0) % order.length];   // consecutive slides get different photos
+  }
+  function photoVisible(p) { return !!photoFor(p); }
+  async function setPhoto(m) {
+    const ph = cleanPhoto(state.photo);
+    const p = pages[cur], key = p ? entryKeyOf(p.en) : '';
+    if (m.mode) { ph.mode = m.mode === 'each' ? 'each' : 'same'; ph.on = true; }
+    if (ph.mode === 'each') {
+      const list = await loadPhotos();
+      if (!list.length) { toast('No photos found. Upload them to the photos folder on GitHub (see SETUP.md).', true, 8000); return; }
+      state.photo = ph;
+      if (m.random) { ph.seed = Math.floor(Math.random() * 1e9) + 1; ph.pins = {}; ph.on = true; }   // a fresh mix for every slide
+      if (m.step && key) {                                                                     // change just this slide's photo
+        const now = photoFor({ ...p, en: p.en }) || list[0];
+        const i = list.indexOf(now);
+        ph.pins[key] = list[((i + m.step) % list.length + list.length) % list.length]; ph.on = true;
+      }
+      if (m.file && key) { ph.pins[key] = m.file; ph.on = true; }
+      if (m.unpin && key) delete ph.pins[key];
+      if (typeof m.on === 'boolean') ph.on = m.on;
+      state.photo = cleanPhoto(ph);
+      render(); saveState(true);
+      return;
+    }
+    if (m.random || m.step || ((m.on || m.mode) && !ph.file && !m.file)) {
+      const list = await loadPhotos();
+      if (!list.length) { toast('No photos found. Upload them to the photos folder on GitHub (see SETUP.md).', true, 8000); return; }
+      const i = list.indexOf(ph.file);
+      if (m.step) ph.file = list[((i < 0 ? 0 : i + m.step) % list.length + list.length) % list.length];
+      else { let n = Math.floor(Math.random() * list.length); if (list.length > 1 && list[n] === ph.file) n = (n + 1) % list.length; ph.file = list[n]; }
+      ph.on = true;
+    }
+    if (m.file) { ph.file = m.file; ph.on = true; }
+    if (typeof m.on === 'boolean') ph.on = m.on;
+    state.photo = cleanPhoto(ph);
+    render(); saveState(true);
+  }
+  function renderPhoto(p) {
+    const box = $('#photo'), file = photoFor(p), show = !!file;
+    if (show) {
+      const img = box.querySelector('img'), src = 'photos/' + file;
+      if (img.getAttribute('src') !== src) img.src = src;
+    }
+    box.classList.toggle('on', show);
+    stage.classList.toggle('ph-right', (videoSettings().videoSide || 'left') === 'right');
+  }
+
   /* ---------------- arranging text and logos ---------------- */
   // Each design keeps its own offsets (and logo sizes), because what's underneath differs per design.
-  const ARRANGE_LABEL = { logo1: 'first logo', logo2: 'second logo', banner: 'top text', next: 'Next box', clock: 'clock',
+  const ARRANGE_LABEL = { photo: 'Swami’s photo', logo1: 'first logo', logo2: 'second logo', banner: 'top text', next: 'Next box', clock: 'clock',
     title: 'title slide text', lyrics: 'bhajan text', info: 'information text', card: 'short slide text' };
   let arranging = false, selKey = null, stageScale = 1;
   function textKey(p) {
@@ -994,6 +1090,7 @@
     document.querySelectorAll('#logos img.logo:not([hidden])').forEach(el => out.push([el.dataset.key, el]));
     const add = (key, sel) => { const el = $(sel); if (el && !el.hidden) out.push([key, el]); };
     add('banner', '#banner'); add('next', '#next-box'); add('clock', '#clock');
+    if ($('#photo').classList.contains('on')) out.push(['photo', $('#photo')]);
     const tk = textKey(pages[cur]); const col = slideEl.querySelector('.col');
     if (tk && col) out.push([tk, col]);
     return out;
@@ -1256,6 +1353,7 @@
     else if (k === '-' || k === '_' || k === 'Subtract') { e.preventDefault(); setZoom(zoom - 0.1); }
     else if (k === '0') setZoom(1);
     else if (k === 'c' || k === 'C') openControls();
+    else if (k === 'p' || k === 'P') setPhoto({ on: !(state.photo && state.photo.on) });
     else if (k === 'Escape') toggleEditor(false);
   });
 
@@ -1303,6 +1401,8 @@
       deck: model ? { name: model.name, date: model.date } : null, saiUrl: state.settings.saiUrl,
       banner: state.banner || '', ticker: cleanTicker(state.ticker), titleSlide: titleSlideInfo(), list: slideListForControl(),
       settings: { ...state.settings, layouts: undefined }, templates: templates.map(t => ({ id: t.id, name: t.name })), arranging,
+      photo: { ...cleanPhoto(state.photo), pins: undefined, current: photoFor(pages[cur]) || '',
+               pinned: !!(pages[cur] && ((state.photo && state.photo.pins) || {})[entryKeyOf(pages[cur].en)]) },
       arrangeKeys: arranging ? movables().map(([k]) => ({ key: k, label: ARRANGE_LABEL[k] })) : [], selKey,
       arrangeSel: arranging && selKey ? placeOf(selKey) : null,
       relay: !!RELAY, hasPin: !!lsGet(LS.pin, ''), saveNote: lastSaveNote,
@@ -1342,6 +1442,7 @@
         if (m.all) state.settings.layouts[template.id] = {}; else if (selKey) delete layoutFor()[selKey];
         applyLayout(); saveArrange(); break;
       case 'arrangeSlide': if (arranging) { go(cur + (m.dir > 0 ? 1 : -1)); applyLayout(); } break;
+      case 'photo': await setPhoto(m); break;
       case 'titleSlide': setTitleSlide(m.titleSlide || {}); afterEditNoSave(); saveState(true); break;
       case 'pin': lsSet(LS.pin, String(m.pin || '')); lastSaveNote = 'Sharing…'; saveState(true); break;
     }

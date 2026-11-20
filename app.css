@@ -372,3 +372,17 @@ body.arranging #controls { display: none; }
 .logo.backed.top-left { left: 28px; top: 20px; }
 .logo.backed.top-right { right: 28px; top: 20px; }
 .logo.backed.bottom-left { left: 28px; bottom: 26px; }
+
+/* ---------- Swami's photo ---------- */
+#photo {
+  position: absolute; z-index: 3; top: 52%; left: calc(var(--vw) * 0.47); height: 620px;
+  transform: translate(-50%, -50%); opacity: 0; pointer-events: none; transition: opacity 600ms ease;
+}
+#photo.on { opacity: 1; }
+#stage.ph-right #photo { left: auto; right: calc(var(--vw) * 0.47); transform: translate(50%, -50%); }
+#photo img {
+  display: block; height: 100%; width: auto; max-width: 820px; object-fit: cover;
+  border-radius: 26px; border: 5px solid var(--box, rgba(255, 255, 255, 0.85));
+  box-shadow: 0 30px 70px -30px rgba(0, 0, 0, 0.6);
+}
+body.arranging #photo.on { pointer-events: auto; }

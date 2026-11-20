@@ -96,6 +96,12 @@
   li.item .t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   li.item .s { color: var(--muted); font-size: 13.5px; white-space: nowrap; }
 
+  .ph-now { display: flex; gap: 12px; align-items: center; }
+  .ph-now img { width: 64px; height: 64px; object-fit: cover; border-radius: 10px; border: 1px solid var(--line); }
+  .ph-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; margin-top: 12px; max-height: 60vh; overflow-y: auto; padding: 2px; }
+  .ph-grid button { padding: 0; min-height: 0; aspect-ratio: 1; overflow: hidden; border-radius: 10px; border: 2px solid transparent; background: var(--bg); }
+  .ph-grid button img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .ph-grid button.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
   .chips { display: flex; flex-wrap: wrap; gap: 8px; }
   .chips button { min-height: 40px; padding: 6px 12px; font-size: 14.5px; }
   .pad { display: grid; grid-template-columns: repeat(3, 64px); grid-template-rows: repeat(3, 56px); gap: 6px; justify-content: center; margin: 6px 0; }
@@ -181,6 +187,32 @@
       <p class="note">Changes the slides straight away.</p>
     </section>
 
+    <section class="card">
+      <h2>Swami’s photo</h2>
+      <div class="ph-now">
+        <img id="ph-thumb" alt="" hidden>
+        <div>
+          <div class="now-title" id="ph-state" style="font-size:16px">Not showing</div>
+          <div class="meta" id="ph-name"></div>
+        </div>
+      </div>
+      <div class="seg" id="ph-mode" style="margin-top:12px">
+        <button data-mode="same">Same photo on every slide</button>
+        <button data-mode="each">A different photo on each slide</button>
+      </div>
+      <div class="tools">
+        <button id="ph-toggle" class="primary">Show photo</button>
+        <button data-ph="random" class="ph-random">Random</button>
+        <button data-ph="prev" aria-label="Previous photo">‹</button>
+        <button data-ph="next" aria-label="Next photo">›</button>
+        <button id="ph-browse">Choose…</button>
+      </div>
+      <p class="note" id="ph-help"></p>
+      <div class="actions left" id="ph-unpin-row" hidden style="margin-top:4px">
+        <button id="ph-unpin">Undo the choice for this slide</button>
+      </div>
+    </section>
+
     <section class="card needs-slides">
       <h2>Jump to a slide</h2>
       <ol id="list"></ol>
@@ -207,6 +239,17 @@
         <button id="tk-apply" class="primary">Update the slides</button>
       </div>
       <p class="note" id="tk-live"></p>
+    </section>
+
+    <section class="card" id="ph-card">
+      <h2>Swami’s photo</h2>
+      <p class="note" style="margin-top:0">Tap a photo to show it on the slides. The words move aside to make room; use the Arrange tab to move or resize it.</p>
+      <div class="actions left" style="margin-top:8px">
+        <button id="ph-toggle-2">Hide photo</button>
+        <button data-ph="random" class="ph-random">Random</button>
+      </div>
+      <p class="note" id="ph-help-2"></p>
+      <div class="ph-grid" id="ph-grid"><p class="note">Loading photos…</p></div>
     </section>
 
     <section class="card">
@@ -386,7 +429,7 @@
   </div>
 </div>
 
-<script src="config.js?v=2026.11.20-17"></script>
+<script src="config.js?v=2026.11.20-19"></script>
 <script>
 (() => {
   'use strict';
@@ -449,6 +492,7 @@
     showNextMode((status.settings || {}).nextMode || 'two');
     showTicker(status.ticker, status.banner);
     showTitleSlide(status.titleSlide);
+    showPhoto(status.photo);
     fillSettings(status.settings, status.templates);
     if (!deckDirty) $('#deck-url').value = status.saiUrl || '';
     $('#deck-name').textContent = status.deck ? [status.deck.name, status.deck.date].filter(Boolean).join(', ') : '';
@@ -626,6 +670,69 @@
   }));
   document.querySelectorAll('[data-arr-slide]').forEach(b => b.addEventListener('click', () => send('arrangeSlide', { dir: +b.dataset.arrSlide })));
 
+  /* ---------- Swami's photo ---------- */
+  let photos = null, curPhoto = { on: false, file: '' };
+  async function loadPhotoList() {
+    if (photos) return photos;
+    try { photos = (await (await fetch('photos/index.json', { cache: 'no-store' })).json()).photos || []; }
+    catch { photos = []; }
+    renderPhotoGrid(); return photos;
+  }
+  function thumbOf(file) { const p = (photos || []).find(x => x.file === file); return p ? p.thumb : ''; }
+  function showPhoto(ph) {
+    curPhoto = ph || { on: false, file: '' };
+    const each = curPhoto.mode === 'each';
+    const shown = curPhoto.current || curPhoto.file;
+    document.querySelectorAll('#ph-mode [data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === (each ? 'each' : 'same')));
+    document.querySelectorAll('.ph-random').forEach(b => { b.textContent = each ? 'Shuffle all' : 'Random'; });
+    const help = each
+      ? (status ? 'Every slide gets its own photo. ‹ › or tapping a photo changes it for the slide showing now; Shuffle all gives every slide a new mix.' : 'Every slide gets its own photo. Choosing for a particular slide works on the presenting laptop.')
+      : 'The same photo stays on every slide until you change it.';
+    $('#ph-help').textContent = help; $('#ph-help-2').textContent = each ? 'Tapping a photo sets it for the slide showing now.' : '';
+    $('#ph-unpin-row').hidden = !(each && curPhoto.pinned && status);
+    const t = thumbOf(shown);
+    $('#ph-thumb').hidden = !t; if (t) $('#ph-thumb').src = t;
+    $('#ph-state').textContent = curPhoto.on ? 'Showing on the slides' : (curPhoto.file ? 'Hidden' : 'Not showing');
+    const n = photos ? photos.findIndex(x => x.file === shown) : -1;
+    $('#ph-name').textContent = n >= 0 ? `Photo ${n + 1} of ${photos.length}` : (photos && !photos.length ? 'No photos uploaded yet' : '');
+    $('#ph-toggle').textContent = curPhoto.on ? 'Hide photo' : 'Show photo';
+    $('#ph-toggle').classList.toggle('primary', !curPhoto.on);
+    $('#ph-toggle-2').textContent = curPhoto.on ? 'Hide photo' : 'Show photo';
+    document.querySelectorAll('#ph-grid button').forEach(b => b.classList.toggle('on', curPhoto.on && b.dataset.file === shown));
+  }
+  function renderPhotoGrid() {
+    const g = $('#ph-grid');
+    if (!photos || !photos.length) { g.innerHTML = '<p class="note">No photos found. Upload them to the <b>photos</b> folder on GitHub together with its <code>index.json</code> (see SETUP.md).</p>'; return; }
+    g.innerHTML = photos.map((p, i) => `<button data-file="${esc(p.file)}" title="Photo ${i + 1}"><img loading="lazy" src="${p.thumb}" alt="Photo ${i + 1}"></button>`).join('');
+    g.querySelectorAll('button').forEach(b => b.addEventListener('click', () => photoCmd({ file: b.dataset.file })));
+    showPhoto(curPhoto);
+  }
+  function photoCmd(m) {
+    if (status) send('photo', m);
+    else {
+      // another device: work out the new photo here, then save it through the relay
+      const list = (photos || []).map(p => p.file), ph = { ...curPhoto };
+      if (m.mode) { ph.mode = m.mode; ph.on = true; }
+      if (ph.mode === 'each' && (m.file || m.step || m.unpin)) { $('#ph-help').textContent = 'Choosing a photo for one slide works on the presenting laptop, where the current slide is known.'; return; }
+      if (ph.mode === 'each' && m.random) { ph.seed = Math.floor(Math.random() * 1e9) + 1; ph.on = true; showPhoto(ph); saveRemote({ photo: { ...ph, clearPins: true } }); return; }
+      if (m.file) { ph.file = m.file; ph.on = true; }
+      if (m.random && list.length) { ph.file = list[Math.floor(Math.random() * list.length)]; ph.on = true; }
+      if (m.step && list.length) { const i = list.indexOf(ph.file); ph.file = list[((i < 0 ? 0 : i + m.step) % list.length + list.length) % list.length]; ph.on = true; }
+      if (typeof m.on === 'boolean') { ph.on = m.on; if (ph.on && !ph.file && list.length) ph.file = list[Math.floor(Math.random() * list.length)]; }
+      showPhoto(ph); saveRemote({ photo: ph });
+    }
+  }
+  $('#ph-toggle').addEventListener('click', () => photoCmd({ on: !curPhoto.on }));
+  document.querySelectorAll('#ph-mode [data-mode]').forEach(b => b.addEventListener('click', () => photoCmd({ mode: b.dataset.mode })));
+  $('#ph-unpin').addEventListener('click', () => photoCmd({ unpin: true }));
+  $('#ph-toggle-2').addEventListener('click', () => photoCmd({ on: !curPhoto.on }));
+  document.querySelectorAll('[data-ph]').forEach(b => b.addEventListener('click', () => {
+    const a = b.dataset.ph;
+    photoCmd(a === 'random' ? { random: true } : { step: a === 'next' ? 1 : -1 });
+  }));
+  $('#ph-browse').addEventListener('click', () => { showTab('words'); setTimeout(() => $('#ph-card').scrollIntoView({ behavior: 'smooth' }), 50); });
+  loadPhotoList();
+
   /* ---------- PIN ---------- */
   $('#pin-save').addEventListener('click', () => {
     const pin = $('#pin').value.trim(); if (!pin) return;
@@ -654,6 +761,7 @@
       const e = (d.edits || {}).__title__ || {};
       showTitleSlide({ title: e.title || '', sub: e.sub || '', cover: d.cover || '' });
       showNextMode(st.nextMode || 'two');
+      showPhoto(d.photo);
       let tpls = null; try { tpls = await (await fetch('templates/index.json', { cache: 'no-store' })).json(); } catch { }
       fillSettings(st, tpls);
     } catch (e) { $('#tk-live').textContent = 'Couldn’t read the shared settings: ' + e.message; }
@@ -676,6 +784,11 @@
       const d = s.decks[key] = s.decks[key] || {};
       if (change.ticker) d.ticker = change.ticker;
       if ('banner' in change) d.banner = change.banner;
+      if (change.photo) {
+        const old = d.photo || {};
+        d.photo = { on: !!change.photo.on, file: change.photo.file || '', mode: change.photo.mode || old.mode || 'same',
+                    seed: change.photo.seed || old.seed || 1, pins: change.photo.clearPins ? {} : (old.pins || {}) };
+      }
       if (change.titleSlide) {
         const t = change.titleSlide, e = {};
         if (t.title) e.title = t.title;
