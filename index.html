@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link id="template-fonts" rel="stylesheet" href="">
-<link rel="stylesheet" href="app.css?v=2026.11.15-10">
+<link rel="stylesheet" href="app.css?v=2026.11.20-14">
 </head>
 <body>
 
@@ -128,7 +128,7 @@
 
 <dialog id="settings-dialog">
   <form method="dialog" id="settings-form">
-    <h2>Settings <small class="version">version 2026.11.15-10</small></h2>
+    <h2>Settings <small class="version">version 2026.11.20-14</small></h2>
     <label>Sai Rhythms published deck link
       <input name="saiUrl" type="url" required placeholder="https://sairhythms.sathyasai.org/song/slides/…/view">
     </label>
@@ -202,7 +202,7 @@
       <small>Leave a box empty to use the center name and date from Sai Rhythms.</small>
       <label>Or use a picture instead (link)
         <input name="cover" type="text" placeholder="images/akhanda-cover.png">
-        <small>For a slide designed in Canva: download it as a PNG or JPG (1920 × 1080), upload it to the <code>images</code> folder on GitHub, and type its link here. Leave empty to use the title text.</small>
+        <small>Easiest: upload a picture (for example a slide made in Canva) from the control page (press C). Or upload it to the <code>images</code> folder on GitHub and type its link here. Leave empty to use the title text.</small>
       </label>
     </fieldset>
     <label>Text at the top of every slide (for this deck only)
@@ -254,6 +254,7 @@
           </select>
         </label>
       </div>
+      <button type="button" data-act="arrange">Arrange text and logos on the slides…</button>
       <label class="narrow">Logo size
         <select name="logoSize">
           <option value="small">Small</option>
@@ -288,9 +289,22 @@
   </form>
 </dialog>
 
+<div id="arrange-bar" hidden>
+  <strong>Arrange</strong>
+  <span id="arrange-sel"></span>
+  <button data-arrange-size="-0.05" title="Smaller logo (−)">Logo −</button>
+  <button data-arrange-size="0.05" title="Bigger logo (+)">Logo +</button>
+  <button data-arrange="reset" id="arrange-reset">Put back</button>
+  <span class="sep"></span>
+  <button data-arrange="prev" title="Previous slide (Page Up)">‹ Slide</button>
+  <button data-arrange="next" title="Next slide (Page Down)">Slide ›</button>
+  <button data-arrange="reset-all">Reset all</button>
+  <button data-arrange="done" class="primary">Done</button>
+</div>
+
 <div id="toast" role="status" hidden></div>
 
-<script src="config.js?v=2026.11.15-10"></script>
-<script src="app.js?v=2026.11.15-10"></script>
+<script src="config.js?v=2026.11.20-14"></script>
+<script src="app.js?v=2026.11.20-14"></script>
 </body>
 </html>

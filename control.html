@@ -34,6 +34,17 @@
   .now-title { font-size: 20px; font-weight: 600; margin: 2px 0 0; }
   .next { margin-top: 10px; padding-left: 12px; border-left: 4px solid var(--gold); }
   .next .now-title { font-size: 17px; }
+  .next.after { border-left-color: var(--line); margin-top: 8px; }
+  .next.after .now-title { font-size: 15px; font-weight: 500; }
+  .preview { margin-top: 10px; width: 100%; border-radius: 10px; border: 1px solid var(--line); display: block; }
+  h3 { font-size: 14.5px; font-weight: 600; margin: 18px 0 8px; color: var(--muted); }
+  #sf { display: flex; flex-direction: column; gap: 10px; }
+  #sf .row { margin-top: 0; }
+  label.range { gap: 2px; }
+  label.range span { color: var(--muted); font-weight: 400; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  .file-btn { position: relative; overflow: hidden; display: inline-flex; align-items: center; }
+  .file-btn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
   .meta { color: var(--muted); font-size: 14px; }
   .count { float: right; color: var(--muted); font-variant-numeric: tabular-nums; font-size: 14px; }
   button, select, input, textarea { font: inherit; color: var(--ink); }
@@ -94,6 +105,11 @@
       <div class="now-title" id="next-title"></div>
       <div class="meta" id="next-meta"></div>
     </div>
+    <div class="next after" id="next2-wrap" hidden>
+      <div class="now-label">After that</div>
+      <div class="now-title" id="next2-title"></div>
+      <div class="meta" id="next2-meta"></div>
+    </div>
     <div class="nav">
       <button data-cmd="prev" aria-label="Previous">‹ Back</button>
       <button data-cmd="next" class="primary" aria-label="Next">Next ›</button>
@@ -141,6 +157,17 @@
   </section>
 
   <section class="card">
+    <h2>Sai Rhythms deck</h2>
+    <label>Published deck link
+      <input type="text" id="deck-url" placeholder="https://sairhythms.sathyasai.org/song/slides/…/view">
+    </label>
+    <p class="note" id="deck-name"></p>
+    <div class="actions">
+      <button id="deck-apply" class="primary">Load this deck</button>
+    </div>
+  </section>
+
+  <section class="card">
     <h2>Title slide</h2>
     <label>Title
       <input type="text" id="ts-title" maxlength="120">
@@ -148,14 +175,95 @@
     <label style="margin-top:10px">Line under the title
       <input type="text" id="ts-sub" maxlength="160">
     </label>
-    <label style="margin-top:10px">Or a picture instead (link)
-      <input type="text" id="ts-cover" placeholder="images/akhanda-cover.png">
+    <label style="margin-top:10px">Or a picture instead
+      <input type="text" id="ts-cover" placeholder="Upload a picture, or type a link like images/cover.png">
     </label>
-    <p class="note">Leave Title or Line empty to use the center name and date from Sai Rhythms. For a Canva design, upload the picture to the <code>images</code> folder on GitHub and type its link.</p>
+    <div class="actions" style="justify-content:flex-start">
+      <span class="file-btn"><button type="button" tabindex="-1">Upload a picture…</button><input type="file" id="ts-file" accept="image/png,image/jpeg,image/webp" aria-label="Upload a picture for the title slide"></span>
+      <button id="ts-clear">Use the title text instead</button>
+    </div>
+    <img id="ts-preview" class="preview" alt="" hidden>
+    <p class="note" id="ts-note">Leave Title or Line empty to use the center name and date from Sai Rhythms. For a slide made in Canva, download it as a PNG or JPG (1920 × 1080) and upload it here.</p>
     <div class="actions">
       <button id="ts-show">Show the title slide</button>
       <button id="ts-apply" class="primary">Update the slides</button>
     </div>
+  </section>
+
+  <section class="card">
+    <h2>Arrange text and logos</h2>
+    <p class="note" style="margin-top:0">Move the words, logos, top text, Next box or clock if they sit on top of part of the design. Each design remembers its own arrangement.</p>
+    <div class="actions" style="justify-content:flex-start">
+      <button id="arrange-btn">Arrange on the slides</button>
+    </div>
+    <p class="note" id="arrange-note"></p>
+  </section>
+
+  <section class="card" id="settings-card">
+    <h2>Settings</h2>
+    <form id="sf" onsubmit="return false">
+      <h3>Darshan video</h3>
+      <label>YouTube links, one per line
+        <textarea name="videos" rows="3" placeholder="https://www.youtube.com/watch?v=XXXXXXXXXXX 1:20-4:05"></textarea>
+      </label>
+      <p class="note">Add times after a link to use part of it, like 1:20-4:05.</p>
+      <div class="row">
+        <label>Show the video on
+          <select name="videoOn">
+            <option value="lyrics">Bhajans and prayers</option>
+            <option value="songs">Bhajans only</option>
+            <option value="all">Every slide</option>
+            <option value="off">No slides</option>
+          </select>
+        </label>
+        <label>Side
+          <select name="videoSide"><option value="left">Left</option><option value="right">Right</option></select>
+        </label>
+      </div>
+      <p class="note">Framing (changes show live on a bhajan slide):</p>
+      <label class="range">Width <span data-v="videoWidth"></span><input type="range" name="videoWidth" min="30" max="60" step="1"></label>
+      <label class="range">Zoom <span data-v="videoZoom"></span><input type="range" name="videoZoom" min="100" max="300" step="5"></label>
+      <label class="range">Focus left to right <span data-v="videoFocusX"></span><input type="range" name="videoFocusX" min="0" max="100" step="1"></label>
+      <label class="range">Focus top to bottom <span data-v="videoFocusY"></span><input type="range" name="videoFocusY" min="0" max="100" step="1"></label>
+      <label class="range">Soft edge <span data-v="videoFeather"></span><input type="range" name="videoFeather" min="0" max="70" step="1"></label>
+
+      <h3>Design</h3>
+      <label>Design
+        <select name="template"></select>
+      </label>
+
+      <h3>Bhajan slides</h3>
+      <div class="row">
+        <label>When a bhajan doesn’t fit
+          <select name="longText"><option value="scroll">Scroll within the slide</option><option value="split">Continue on the next slide</option></select>
+        </label>
+        <label>Most lines per slide
+          <input type="text" inputmode="numeric" name="maxLines">
+        </label>
+      </div>
+      <label class="check"><input type="checkbox" name="showMeaning"> Show the meaning under each bhajan</label>
+      <label class="check"><input type="checkbox" name="showSinger"> Show the singer and pitch under the title</label>
+      <label class="check"><input type="checkbox" name="titleSlide"> Start with a title slide</label>
+      <label class="check"><input type="checkbox" name="showClock"> Show the current time</label>
+
+      <h3>Logos on every slide</h3>
+      <div class="row">
+        <label>First logo (link)<input type="text" name="logo1"></label>
+        <label>Where<select name="logo1Pos"><option value="top-left">Top left</option><option value="top-right">Top right</option><option value="bottom-left">Bottom left</option><option value="off">Don’t show</option></select></label>
+      </div>
+      <div class="row">
+        <label>Second logo (link)<input type="text" name="logo2"></label>
+        <label>Where<select name="logo2Pos"><option value="top-left">Top left</option><option value="top-right">Top right</option><option value="bottom-left">Bottom left</option><option value="off">Don’t show</option></select></label>
+      </div>
+      <label>Logo size
+        <select name="logoSize"><option value="small">Small</option><option value="medium">Medium</option><option value="large">Large</option></select>
+      </label>
+    </form>
+    <div class="actions">
+      <button id="sf-undo">Undo changes</button>
+      <button id="sf-save" class="primary">Save settings</button>
+    </div>
+    <p class="note" id="sf-note"></p>
   </section>
 
   <section class="card" id="share-card" hidden>
@@ -173,7 +281,7 @@
   </section>
 </main>
 
-<script src="config.js?v=2026.11.15-10"></script>
+<script src="config.js?v=2026.11.20-14"></script>
 <script>
 (() => {
   'use strict';
@@ -185,7 +293,8 @@
 
   const presenters = new Map();   // id → latest status
   let status = null;              // the slides window being controlled
-  let tkDirty = false, bannerDirty = false, tsDirty = false;
+  let tkDirty = false, bannerDirty = false, tsDirty = false, deckDirty = false;
+  const getPin = () => { try { return JSON.parse(localStorage.getItem('bs.pin.v1') || '""'); } catch { return ''; } };
 
   function pickTarget() {
     const now = Date.now();
@@ -224,6 +333,14 @@
       $('#next-title').textContent = nx.title;
       $('#next-meta').textContent = [nx.singer, nx.pitch ? 'pitch ' + nx.pitch : ''].filter(Boolean).join(', ');
     }
+    const n2 = status.next2;
+    $('#next2-wrap').hidden = !n2;
+    if (n2) {
+      $('#next2-title').textContent = n2.title;
+      $('#next2-meta').textContent = [n2.singer, n2.pitch ? 'pitch ' + n2.pitch : ''].filter(Boolean).join(', ');
+    }
+    if (!deckDirty) $('#deck-url').value = status.saiUrl || '';
+    $('#deck-name').textContent = status.deck ? [status.deck.name, status.deck.date].filter(Boolean).join(', ') : '';
     $('#btn-black').classList.toggle('on', !!status.blackout);
     $('#btn-black').textContent = status.blackout ? 'Black screen is on' : 'Black screen';
     $('#btn-video').classList.toggle('on', !status.video);
@@ -231,6 +348,9 @@
     $('#scroll-note').hidden = !status.scroll;
     showTicker(status.ticker, status.banner);
     showTitleSlide(status.titleSlide);
+    fillSettings(status.settings, status.templates);
+    $('#arrange-btn').textContent = status.arranging ? 'Finish arranging' : 'Arrange on the slides';
+    $('#arrange-note').textContent = status.arranging ? 'On the slides: drag the outlined text or logos. Scroll on a logo to resize it. Arrow keys nudge the selected item. Done is in the bar at the top.' : '';
     renderList();
     const share = status.relay && !status.hasPin;
     $('#share-card').hidden = !share && !/PIN/.test(status.saveNote || '');
@@ -251,7 +371,54 @@
     $('#ts-sub').placeholder = t.origSub || 'Date from Sai Rhythms';
     if (tsDirty) return;
     $('#ts-title').value = t.title || ''; $('#ts-sub').value = t.sub || ''; $('#ts-cover').value = t.cover || '';
+    showPreview(t.cover || '');
   }
+  function showPreview(v) {
+    const img = $('#ts-preview');
+    let src = '';
+    if (v.startsWith('drive:')) { try { src = JSON.parse(localStorage.getItem('bs.img.' + v.slice(6)) || '""'); } catch { } }
+    else if (v) src = /^https?:/.test(v) ? v : new URL(v, location.href).href;
+    img.hidden = !src; if (src && img.src !== src) img.src = src;
+  }
+  $('#ts-clear').addEventListener('click', () => { $('#ts-cover').value = ''; tsDirty = true; $('#ts-apply').click(); });
+  $('#ts-file').addEventListener('change', async e => {
+    const file = e.target.files[0]; e.target.value = '';
+    if (file) await uploadCover(file);
+  });
+  async function uploadCover(file) {
+    const note = $('#ts-note');
+    if (!RELAY) { note.textContent = 'Uploading needs the Google Apps Script relay (see SETUP.md). For now, upload the picture to the images folder on GitHub and type its link.'; return; }
+    const pin = getPin();
+    if (!pin) { $('#share-card').hidden = false; $('#share-note').textContent = 'Enter the editing PIN once on this device, then choose the picture again.'; note.textContent = 'Uploading needs the editing PIN.'; return; }
+    try {
+      note.textContent = 'Preparing the picture…';
+      const bmp = await createImageBitmap(file);
+      const scale = Math.min(1, 1920 / bmp.width, 1080 / bmp.height);   // big exports are scaled down to screen size
+      const c = document.createElement('canvas');
+      c.width = Math.round(bmp.width * scale); c.height = Math.round(bmp.height * scale);
+      c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+      const dataUrl = c.toDataURL('image/jpeg', 0.9);
+      note.textContent = 'Uploading…';
+      const res = await fetch(RELAY, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'uploadImage', pin, mime: 'image/jpeg', name: file.name.replace(/\.\w+$/, '') + '.jpg', data: dataUrl.split(',')[1] }) });
+      const r = await res.json();
+      if (r.error === 'wrong-pin') { localStorage.removeItem('bs.pin.v1'); $('#share-card').hidden = false; $('#share-note').textContent = 'That PIN didn’t match. Enter it again, then choose the picture again.'; note.textContent = ''; return; }
+      if (!r.ok) throw new Error(/action|Unknown/i.test(r.error || '') ? 'the Google Apps Script needs the latest update (see SETUP.md)' : (r.error || 'unknown error'));
+      try { localStorage.setItem('bs.img.' + r.id, JSON.stringify(dataUrl)); } catch { }
+      $('#ts-cover').value = 'drive:' + r.id;
+      showPreview('drive:' + r.id);
+      tsDirty = true; $('#ts-apply').click();
+      note.textContent = 'Uploaded and set as the title slide. It’s kept in the “Bhajan slides pictures” folder in the center’s Google Drive.';
+    } catch (err) { note.textContent = 'Couldn’t upload: ' + err.message; }
+  }
+  $('#deck-url').addEventListener('input', () => { deckDirty = true; });
+  $('#deck-apply').addEventListener('click', () => {
+    const url = $('#deck-url').value.trim();
+    if (!/^https:\/\/[^/]*sairhythms[^/]*\//i.test(url)) { $('#deck-name').textContent = 'That doesn’t look like a Sai Rhythms link.'; return; }
+    deckDirty = false;
+    $('#deck-name').textContent = 'Loading…';
+    if (status) send('deckUrl', { url }); else saveRemote({ saiUrl: url });
+  });
   ['#ts-title', '#ts-sub', '#ts-cover'].forEach(s => $(s).addEventListener('input', () => { tsDirty = true; }));
   $('#ts-apply').addEventListener('click', () => {
     tsDirty = false;
@@ -259,6 +426,54 @@
     if (status) send('titleSlide', { titleSlide: t }); else saveRemote({ titleSlide: t });
   });
   $('#ts-show').addEventListener('click', () => send('gotoTitle'));
+
+  /* --- settings --- */
+  const sf = $('#sf');
+  const VIDEO_KEYS = ['videoSide', 'videoWidth', 'videoZoom', 'videoFocusX', 'videoFocusY', 'videoFeather'];
+  let sfDirty = false, previewing = false, lastTplSig = '';
+  function fillSettings(s, tpls) {
+    if (!s) return;
+    if (tpls) {
+      const sig = JSON.stringify(tpls);
+      if (sig !== lastTplSig) { lastTplSig = sig; sf.template.innerHTML = tpls.map(t => `<option value="${esc(t.id)}">${esc(t.name)}</option>`).join(''); }
+    }
+    if (sfDirty) return;
+    for (const el of sf.elements) {
+      if (!el.name || !(el.name in s)) continue;
+      if (el.type === 'checkbox') el.checked = !!s[el.name]; else el.value = s[el.name];
+    }
+    showRanges();
+  }
+  function showRanges() { sf.querySelectorAll('[data-v]').forEach(sp => { sp.textContent = sf[sp.dataset.v].value + '%'; }); }
+  function formSettings() {
+    const v = {};
+    for (const el of sf.elements) { if (el.name) v[el.name] = el.type === 'checkbox' ? el.checked : el.value; }
+    return v;
+  }
+  let pvTimer = null;
+  sf.addEventListener('input', e => {
+    sfDirty = true; showRanges();
+    $('#sf-note').textContent = 'Not saved yet.';
+    if (VIDEO_KEYS.includes(e.target.name) && status) {
+      clearTimeout(pvTimer);
+      pvTimer = setTimeout(() => { previewing = true; const v = formSettings(); send('videoPreview', { settings: Object.fromEntries(VIDEO_KEYS.map(k => [k, v[k]])) }); }, 60);
+    }
+  });
+  sf.addEventListener('change', () => { sfDirty = true; $('#sf-note').textContent = 'Not saved yet.'; });
+  $('#sf-save').addEventListener('click', () => {
+    const v = formSettings(); sfDirty = false; previewing = false;
+    if (status) { send('settings', { settings: v }); $('#sf-note').textContent = 'Saved.'; }
+    else saveRemote({ settings: v }).then(() => { $('#sf-note').textContent = $('#tk-live').textContent; });
+  });
+  $('#sf-undo').addEventListener('click', () => {
+    sfDirty = false; $('#sf-note').textContent = '';
+    if (previewing) { send('videoPreviewEnd'); previewing = false; }
+    if (status) fillSettings(status.settings, status.templates); else { remoteLoaded = 0; loadRemote(); }
+  });
+  $('#arrange-btn').addEventListener('click', () => {
+    if (!status) { $('#arrange-note').textContent = 'Arranging needs the slides open in this browser (on the presenting laptop).'; return; }
+    send('arrange', { on: !status.arranging });
+  });
 
   let listSig = '';
   function renderList() {
@@ -341,6 +556,9 @@
     try {
       const s = await getRemote();
       const d = (s.decks || {})[deckKey((s.settings || {}).saiUrl || CFG.defaultSaiRhythmsUrl)] || {};
+      if (!deckDirty) $('#deck-url').value = (s.settings || {}).saiUrl || CFG.defaultSaiRhythmsUrl || '';
+      let tpls = null; try { tpls = await (await fetch('templates/index.json', { cache: 'no-store' })).json(); } catch { }
+      fillSettings(s.settings || {}, tpls);
       showTicker(d.ticker, d.banner);
       const e = (d.edits || {}).__title__ || {};
       showTitleSlide({ title: e.title || '', sub: e.sub || '', cover: d.cover || '' });
@@ -359,6 +577,9 @@
     try {
       const s = await getRemote();
       s.settings = s.settings || {}; s.decks = s.decks || {};
+      if (change.saiUrl) s.settings.saiUrl = change.saiUrl;
+      if (change.settings) { const keep = s.settings.saiUrl, lay = s.settings.layouts; Object.assign(s.settings, change.settings); s.settings.saiUrl = keep; if (lay) s.settings.layouts = lay;
+        ['videoWidth', 'videoZoom', 'videoFocusX', 'videoFocusY', 'videoFeather', 'maxLines'].forEach(k => { if (k in s.settings) s.settings[k] = +s.settings[k]; }); }
       const key = deckKey(s.settings.saiUrl || CFG.defaultSaiRhythmsUrl);
       const d = s.decks[key] = s.decks[key] || {};
       if (change.ticker) d.ticker = change.ticker;

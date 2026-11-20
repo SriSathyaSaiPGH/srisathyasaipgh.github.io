@@ -25,6 +25,7 @@
     logo2Pos: 'top-right',
     logoSize: 'medium',
     showClock: true,
+    layouts: {},        // per design: positions/sizes people dragged in "Arrange" mode
     videoSide: 'left',
     videoWidth: 45,     // % of the slide width
     videoZoom: 130,     // %
@@ -316,9 +317,11 @@
       roleCount[role] = (roleCount[role] || 0);
       const bgIndex = roleCount[role]++;
       // "Next" looks ahead to the next real (Sai Rhythms) item, skipping added slides
-      let next = null;
-      for (let j = vi + 1; j < visible.length; j++) { if (visible[j].item && visible[j].item.key !== '__title__') { next = visible[j].item; break; } }
-      kinds.pages.forEach((p, pi) => pages.push({ en, ...p, role, bgIndex, pageNo: pi + 1, pageCount: kinds.pages.length, next }));
+      // the next two real (Sai Rhythms) items, skipping added slides
+      const ahead = [];
+      for (let j = vi + 1; j < visible.length && ahead.length < 2; j++) { if (visible[j].item && visible[j].item.key !== '__title__') ahead.push(visible[j].item); }
+      const [next = null, next2 = null] = ahead;
+      kinds.pages.forEach((p, pi) => pages.push({ en, ...p, role, bgIndex, pageNo: pi + 1, pageCount: kinds.pages.length, next, next2 }));
     });
     if (cur >= pages.length) cur = Math.max(0, pages.length - 1);
   }
@@ -395,6 +398,32 @@
   async function loadTemplates() {
     try { templates = await (await fetch('templates/index.json', { cache: 'no-store' })).json(); }
     catch { templates = [{ id: 'akhanda', name: 'Akhanda' }]; }
+    try { await discoverTemplates(); } catch { /* the list file alone still works */ }
+  }
+  // Design folders uploaded into /templates show up by themselves, even if index.json wasn't updated.
+  // On a GitHub Pages site the folder can be listed through GitHub's public API (cached for an hour).
+  async function discoverTemplates() {
+    const host = location.hostname.match(/^([a-z0-9-]+)\.github\.io$/i);
+    if (!host) return;
+    const first = location.pathname.split('/').filter(Boolean)[0];
+    const repo = first && !first.includes('.') ? first : `${host[1]}.github.io`;
+    const cacheKey = 'bs.designs.v1';
+    let found = null;
+    try { const c = JSON.parse(sessionStorage.getItem(cacheKey) || 'null'); if (c && Date.now() - c.at < 3600e3) found = c.list; } catch { }
+    if (!found) {
+      const res = await fetch(`https://api.github.com/repos/${host[1]}/${repo}/contents/templates`);
+      if (!res.ok) return;
+      const dirs = (await res.json()).filter(f => f.type === 'dir').map(f => f.name);
+      const known = new Set(templates.map(t => t.id));
+      found = [];
+      for (const id of dirs) {
+        if (known.has(id)) continue;
+        try { const t = await (await fetch(`templates/${id}/template.json`)).json(); found.push({ id, name: t.name || id }); } catch { }
+      }
+      try { sessionStorage.setItem(cacheKey, JSON.stringify({ at: Date.now(), list: found })); } catch { }
+    }
+    const have = new Set(templates.map(t => t.id));
+    for (const t of found) if (!have.has(t.id)) templates.push(t);
   }
   async function applyTemplate(id) {
     const tid = templates.some(t => t.id === id) ? id : (templates[0] && templates[0].id) || 'akhanda';
@@ -406,11 +435,29 @@
       toast('That design could not be loaded, so plain colours are used.', true);
     }
     $('#template-fonts').href = template.fonts || '';
-    const vars = { '--title-font': template.titleFont, '--body-font': template.bodyFont, '--ink': template.ink, '--soft': template.soft, '--accent': template.accent, '--panel': template.panel, '--title-ink': template.titleInk };
-    for (const [k, v] of Object.entries(vars)) if (v) stage.style.setProperty(k, v);
+    stage.style.setProperty('--title-font', template.titleFont || "Georgia, serif");
+    stage.style.setProperty('--body-font', template.bodyFont || "'Segoe UI', Arial, sans-serif");
+    currentTone = ''; setTone(template.defaultTone || 'light');
     // preload images
     Object.values(template.backgrounds || {}).flat().forEach(b => { if (b.src) { const i = new Image(); i.src = `templates/${tid}/${b.src}`; } });
   }
+  /* Colours: a design gives one palette, and optionally a second ("dark") palette for backgrounds
+     marked "tone": "dark" (light text on dark glass). Designs whose backgrounds are all dark just
+     give dark colours as their main palette. */
+  const PALETTE_DEFAULTS = {
+    ink: '#13284A', soft: '#3A5274', accent: '#A87F2F', panel: 'rgba(255, 255, 255, 0.62)', titleInk: '#FFFFFF',
+    box: 'rgba(255, 255, 255, 0.82)', strip: 'rgba(19, 40, 74, 0.9)', stripInk: '#FFFFFF', rule: 'rgba(19, 40, 74, 0.16)',
+  };
+  const CSS_NAME = { ink: '--ink', soft: '--soft', accent: '--accent', panel: '--panel', titleInk: '--title-ink', box: '--box', strip: '--strip', stripInk: '--strip-ink', rule: '--rule' };
+  let currentTone = '';
+  function setTone(tone) {
+    if (!template || tone === currentTone) return;
+    currentTone = tone;
+    const pal = { ...PALETTE_DEFAULTS, ...pick(template), ...(tone === 'dark' && template.dark ? template.dark : {}) };
+    for (const [k, css] of Object.entries(CSS_NAME)) stage.style.setProperty(css, pal[k]);
+    stage.classList.toggle('tone-dark', tone === 'dark' || (!template.dark && template.defaultTone === 'dark'));
+  }
+  function pick(t) { const o = {}; for (const k of Object.keys(CSS_NAME)) if (t[k]) o[k] = t[k]; return o; }
   function bgFor(role, index) {
     const B = (template && template.backgrounds) || {};
     const list = B[role] || B.lyrics || B.card || [];
@@ -448,10 +495,11 @@
     highlightEditorRow();
     if (!p) {
       slideEl.innerHTML = `<div class="col center"><div class="panel"><h1 class="s-title">No slides yet</h1><div class="s-meaning">${loadError ? 'The deck couldn’t be loaded: ' + esc(loadError) + '<br>' : ''}Check the Sai Rhythms link in Settings, then press Reload from list.</div></div></div>`;
-      nextBox.hidden = true; stage.className = ''; return;
+      nextBox.hidden = true; stage.classList.remove('video-on', 'is-title', 'is-cover'); return;
     }
     const bg = bgFor(p.role, p.bgIndex);
     setBackground(bg);
+    setTone(bg.tone || template.defaultTone || 'light');
     const wantVideo = videoWanted(p);
     const vs = videoSettings();
     let colClass = 'center';
@@ -461,13 +509,14 @@
     else if (wantVideo) { setGeom(vs.videoSide === 'right' ? 'vs-right' : 'vs-left'); colClass = vs.videoSide === 'right' ? 'left' : 'right'; }
     stage.classList.toggle('video-on', p.kind === 'darshan' || wantVideo);
     stage.classList.toggle('is-title', p.kind === 'title');                 // no top text on the title slide
-    stage.classList.toggle('is-cover', p.kind === 'title' && !!state.cover); // a full picture replaces the title slide
+    stage.classList.toggle('is-cover', p.kind === 'title' && !!state.cover && !!coverSrc(state.cover)); // a full picture replaces the title slide
     layoutVideo();
     player.setActive(wantVideo);
 
     slideEl.innerHTML = slideHtml(p, colClass);
     fitText();
     renderNext(p);
+    applyLayout();
   }
 
   function leadHtml(it) {
@@ -482,7 +531,7 @@
     const pageNote = p.pageCount > 1 ? `<div class="s-page">${p.pageNo} of ${p.pageCount}</div>` : '';
     switch (p.kind) {
       case 'title':
-        if (state.cover) return `<div class="cover"><img src="${esc(absUrl(state.cover))}" alt="${esc(it.title)}" onerror="this.closest('.cover').classList.add('broken')"><div class="cover-msg">The title picture couldn’t be loaded. Check its link in Settings → Title slide.</div></div>`;
+        if (state.cover && coverSrc(state.cover)) return `<div class="cover"><img src="${esc(coverSrc(state.cover))}" alt="${esc(it.title)}" onerror="this.closest('.cover').classList.add('broken')"><div class="cover-msg">The title picture couldn’t be loaded. Check its link in Settings → Title slide.</div></div>`;
         return `<div class="col full"><div class="s-hero"><div class="s-card">${esc(it.title)}</div>${it.date ? `<div class="s-card-sub">${esc(it.date)}</div>` : ''}</div></div>`;
       case 'card':
         return `<div class="col ${colClass === 'center' ? 'full' : colClass}"><div class="s-card">${esc(title)}</div></div>`;
@@ -539,9 +588,11 @@
     const nx = p.next;
     const show = nx && (nx.isSong || (it && it.isSong));
     if (!show || p.kind === 'title') { nextBox.hidden = true; return; }
-    const meta = nx.isSong && (nx.singer || nx.pitch)
-      ? `<div class="nb-meta">${nx.singer ? `<span>${esc(nx.singer)}</span>` : ''}${nx.pitch ? `<span class="pitch">${esc(nx.pitch)}</span>` : ''}</div>` : '';
-    nextBox.innerHTML = `<div class="nb-label">Next</div><div class="nb-title">${esc(nx.title)}</div>${meta}`;
+    const meta = x => x.isSong && (x.singer || x.pitch)
+      ? `<div class="nb-meta">${x.singer ? `<span>${esc(x.singer)}</span>` : ''}${x.pitch ? `<span class="pitch">${esc(x.pitch)}</span>` : ''}</div>` : '';
+    const n2 = p.next2;
+    const after = n2 ? `<div class="nb-after"><div class="nb-label">After that</div><div class="nb-title">${esc(n2.title)}</div>${meta(n2)}</div>` : '';
+    nextBox.innerHTML = `<div class="nb-label">Next</div><div class="nb-title">${esc(nx.title)}</div>${meta(nx)}${after}`;
     nextBox.hidden = false;
   }
 
@@ -800,6 +851,29 @@
   });
 
   /* title slide: text and optional picture */
+  // A picture is either a link (images/cover.png, https://…) or "drive:ID" for one uploaded from the control page.
+  const imgCache = {};
+  function coverSrc(v) {
+    if (!v.startsWith('drive:')) return absUrl(v);
+    const id = v.slice(6);
+    if (imgCache[id]) return imgCache[id];
+    const saved = lsGet('bs.img.' + id, '');
+    if (saved) return (imgCache[id] = saved);
+    fetchDriveImage(id);
+    return '';   // show the text title until the picture arrives
+  }
+  const imgLoading = new Set();
+  async function fetchDriveImage(id) {
+    if (!RELAY || imgLoading.has(id)) return;
+    imgLoading.add(id);
+    try {
+      const d = await relayGet({ action: 'image', id });
+      imgCache[id] = `data:${d.mime || 'image/jpeg'};base64,${d.data}`;
+      lsSet('bs.img.' + id, imgCache[id]);   // keep a copy so it shows instantly next time
+      if (pages[cur] && pages[cur].kind === 'title') render();
+    } catch (e) { toast('The title picture couldn’t be loaded: ' + e.message, true, 8000); }
+    imgLoading.delete(id);
+  }
   function titleOrig() { return { title: (model && model.name) || 'Devotional session', sub: (model && model.date) || '' }; }
   function titleSlideInfo() {
     const e = state.edits.__title__ || {}, o = titleOrig();
@@ -855,6 +929,7 @@
     });
   }
   function renderOverlays() {
+    queueMicrotask(applyLayout);
     renderTicker();
     const b = $('#banner'), text = (state.banner || '').trim();
     b.textContent = text; b.hidden = !text;
@@ -878,16 +953,145 @@
       const bl = wrap.querySelector('img.bottom-left:not([hidden])');   // keep the clock clear of a bottom-left logo
       stage.style.setProperty('--clock-left', bl && bl.complete && bl.naturalWidth ? (40 + bl.offsetWidth + 24) + 'px' : '40px');
     };
-    [[s.logo1, s.logo1Pos], [s.logo2, s.logo2Pos]].forEach(([src, pos]) => {
+    [[s.logo1, s.logo1Pos, 'logo1'], [s.logo2, s.logo2Pos, 'logo2']].forEach(([src, pos, key]) => {
       if (!src || !pos || pos === 'off') return;
       const img = new Image();
-      img.className = 'logo ' + pos; img.alt = '';
+      img.className = 'logo ' + pos; img.alt = ''; img.dataset.key = key; img.draggable = false;
       img.onerror = () => { img.hidden = true; updateTop(); };
       img.onload = updateTop;
       img.src = absUrl(src);
       wrap.appendChild(img);
     });
     updateTop();
+    applyLayout();
+  }
+
+  /* ---------------- arranging text and logos ---------------- */
+  // Each design keeps its own offsets (and logo sizes), because what's underneath differs per design.
+  const ARRANGE_LABEL = { logo1: 'first logo', logo2: 'second logo', banner: 'top text', next: 'Next box', clock: 'clock',
+    title: 'title slide text', lyrics: 'bhajan text', info: 'information text', card: 'short slide text' };
+  let arranging = false, selKey = null, stageScale = 1;
+  function textKey(p) {
+    if (!p) return null;
+    if (p.kind === 'title') return state.cover && coverSrc(state.cover) ? null : 'title';
+    if (p.kind === 'lyrics') return 'lyrics';
+    if (p.kind === 'html' || p.kind === 'prose') return 'info';
+    if (p.kind === 'card' || p.kind === 'image') return 'card';
+    return null;
+  }
+  function layoutFor() {
+    const all = state.settings.layouts || (state.settings.layouts = {});
+    const id = template ? template.id : 'default';
+    return all[id] || (all[id] = {});
+  }
+  function movables() {
+    const out = [];
+    document.querySelectorAll('#logos img.logo:not([hidden])').forEach(el => out.push([el.dataset.key, el]));
+    const add = (key, sel) => { const el = $(sel); if (el && !el.hidden) out.push([key, el]); };
+    add('banner', '#banner'); add('next', '#next-box'); add('clock', '#clock');
+    const tk = textKey(pages[cur]); const col = slideEl.querySelector('.col');
+    if (tk && col) out.push([tk, col]);
+    return out;
+  }
+  function applyLayout() {
+    const L = layoutFor();
+    for (const [key, el] of movables()) {
+      const o = L[key] || {};
+      el.style.translate = (o.dx || o.dy) ? `${o.dx || 0}px ${o.dy || 0}px` : '';
+      el.style.scale = o.s && o.s !== 1 ? String(o.s) : '';
+      el.classList.toggle('movable', arranging);
+      el.classList.toggle('selected', arranging && key === selKey);
+      el.dataset.arrangeKey = key;
+    }
+  }
+  function setArrange(on) {
+    arranging = on;
+    document.body.classList.toggle('arranging', on);
+    $('#arrange-bar').hidden = !on;
+    if (on) { toggleEditor(false); document.body.classList.remove('idle'); }
+    selKey = null; updateArrangeBar(); applyLayout(); broadcastStatus();
+  }
+  function updateArrangeBar() {
+    $('#arrange-sel').textContent = selKey ? `Selected: ${ARRANGE_LABEL[selKey]}` : 'Drag the text or a logo to move it.';
+    $('#arrange-reset').disabled = !selKey;
+    document.querySelectorAll('[data-arrange-size]').forEach(b => { b.disabled = !selKey || !/^logo/.test(selKey); });
+  }
+  function nudge(key, dx, dy, ds) {
+    const L = layoutFor(), o = L[key] || (L[key] = { dx: 0, dy: 0, s: 1 });
+    o.dx = Math.round((o.dx || 0) + dx); o.dy = Math.round((o.dy || 0) + dy);
+    if (ds) o.s = Math.max(0.4, Math.min(3, Math.round(((o.s || 1) + ds) * 100) / 100));
+    applyLayout();
+  }
+  let arrangeSaveTimer = null;
+  function saveArrange() { clearTimeout(arrangeSaveTimer); arrangeSaveTimer = setTimeout(() => saveState(true), 500); }
+  let drag = null;
+  stage.addEventListener('pointerdown', e => {
+    if (!arranging) return;
+    const el = e.target.closest('[data-arrange-key].movable');
+    if (!el) { selKey = null; updateArrangeBar(); applyLayout(); return; }
+    e.preventDefault();
+    selKey = el.dataset.arrangeKey; updateArrangeBar(); applyLayout();
+    const o = layoutFor()[selKey] || {};
+    drag = { key: selKey, x: e.clientX, y: e.clientY, dx: o.dx || 0, dy: o.dy || 0 };
+    stage.setPointerCapture(e.pointerId);
+  });
+  stage.addEventListener('pointermove', e => {
+    if (!drag) return;
+    const L = layoutFor(), o = L[drag.key] || (L[drag.key] = { dx: 0, dy: 0, s: 1 });
+    o.dx = Math.round(drag.dx + (e.clientX - drag.x) / stageScale);
+    o.dy = Math.round(drag.dy + (e.clientY - drag.y) / stageScale);
+    applyLayout();
+  });
+  stage.addEventListener('pointerup', () => { if (drag) { drag = null; saveArrange(); } });
+  stage.addEventListener('wheel', e => {
+    if (!arranging) return;
+    const el = e.target.closest('[data-arrange-key].movable');
+    if (!el || !/^logo/.test(el.dataset.arrangeKey)) return;
+    e.preventDefault(); selKey = el.dataset.arrangeKey; updateArrangeBar();
+    nudge(selKey, 0, 0, e.deltaY < 0 ? 0.05 : -0.05); saveArrange();
+  }, { passive: false });
+  function arrangeKey(e) {
+    const k = e.key, step = e.shiftKey ? 20 : 4;
+    if (k === 'Escape' || k === 'Enter') { setArrange(false); return true; }
+    if (k === 'PageDown') { go(cur + 1); applyLayout(); return true; }
+    if (k === 'PageUp') { go(cur - 1); applyLayout(); return true; }
+    if (!selKey) return ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' '].includes(k);
+    const moves = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
+    if (moves[k]) { nudge(selKey, ...moves[k]); saveArrange(); return true; }
+    if ((k === '+' || k === '=') && /^logo/.test(selKey)) { nudge(selKey, 0, 0, 0.05); saveArrange(); return true; }
+    if ((k === '-' || k === '_') && /^logo/.test(selKey)) { nudge(selKey, 0, 0, -0.05); saveArrange(); return true; }
+    return false;
+  }
+  $('#arrange-bar').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    const a = b.dataset.arrange;
+    if (a === 'done') setArrange(false);
+    if (a === 'prev') { go(cur - 1); applyLayout(); }
+    if (a === 'next') { go(cur + 1); applyLayout(); }
+    if (a === 'reset' && selKey) { delete layoutFor()[selKey]; applyLayout(); saveArrange(); }
+    if (a === 'reset-all' && confirm('Put every text and logo back where the design places them?')) { state.settings.layouts[template.id] = {}; applyLayout(); saveArrange(); }
+    if (b.dataset.arrangeSize && selKey) { nudge(selKey, 0, 0, +b.dataset.arrangeSize); saveArrange(); }
+  });
+
+  /* settings changed from the control page */
+  const SETTING_KEYS = Object.keys(DEFAULT_SETTINGS).filter(k => k !== 'saiUrl' && k !== 'layouts');
+  function cleanSettings(v) {
+    const out = {};
+    for (const k of SETTING_KEYS) {
+      if (!(k in (v || {}))) continue;
+      const d = DEFAULT_SETTINGS[k], x = v[k];
+      out[k] = typeof d === 'number' ? (Number.isFinite(+x) ? +x : d) : typeof d === 'boolean' ? !!x : String(x ?? '');
+    }
+    if ('maxLines' in out) out.maxLines = Math.max(4, Math.min(20, out.maxLines));
+    return out;
+  }
+  async function applySettings(values) {
+    const s = state.settings, vals = cleanSettings(values);
+    const tplChanged = vals.template && vals.template !== s.template;
+    Object.assign(s, vals);
+    player.configure(s.videos); renderLogos(); renderOverlays();
+    if (tplChanged) { lastBg = ''; await applyTemplate(s.template); }
+    afterEditNoSave(); saveState(true);
   }
 
   /* ---------------- settings ---------------- */
@@ -950,6 +1154,7 @@
   });
   $('#settings-form').addEventListener('click', e => {
     const a = e.target.closest('[data-act]'); if (!a) return;
+    if (a.dataset.act === 'arrange') { $('#settings-dialog').close('cancel'); setArrange(true); return; }
     if (a.dataset.act === 'export') {
       stashDeckData();
       const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
@@ -1014,14 +1219,16 @@
     if (b.dataset.act === 'add-start') openSlideDialog(null, null);
   });
   $('#viewport').addEventListener('click', e => {
-    if (!$('#editor').hidden) return;
+    if (!$('#editor').hidden || arranging) return;
     if (e.target.closest('.scroller')) return;   // clicking inside lyrics shouldn't jump away
     if (e.clientX < window.innerWidth * 0.25) retreat(); else advance();
   });
   document.addEventListener('keydown', e => {
     if (document.querySelector('dialog[open]')) return;
     if (e.target.matches('input, textarea, select')) return;
+    if (arranging) { if (arrangeKey(e)) e.preventDefault(); return; }
     const k = e.key;
+    if (k === 'l' || k === 'L') { setArrange(true); return; }
     if (k === 'ArrowDown') { e.preventDefault(); advance(0.35); }
     else if (k === 'ArrowUp') { e.preventDefault(); retreat(0.35); }
     else if (['ArrowRight', 'PageDown', ' ', 'Enter'].includes(k)) { e.preventDefault(); advance(); }
@@ -1079,9 +1286,11 @@
     chan.postMessage({
       type: 'status', id: myId, fullscreen: !!document.fullscreenElement, visible: document.visibilityState === 'visible', at: Date.now(),
       cur, total: pages.length, title, next: p && p.next ? { title: p.next.title, singer: p.next.isSong ? p.next.singer : '', pitch: p.next.isSong ? p.next.pitch : '' } : null,
+      next2: p && p.next2 ? { title: p.next2.title, singer: p.next2.isSong ? p.next2.singer : '', pitch: p.next2.isSong ? p.next2.pitch : '' } : null,
       scroll: !!scroller(), blackout, video: videoForced, zoom,
       deck: model ? { name: model.name, date: model.date } : null, saiUrl: state.settings.saiUrl,
       banner: state.banner || '', ticker: cleanTicker(state.ticker), titleSlide: titleSlideInfo(), list: slideListForControl(),
+      settings: { ...state.settings, layouts: undefined }, templates: templates.map(t => ({ id: t.id, name: t.name })), arranging,
       relay: !!RELAY, hasPin: !!lsGet(LS.pin, ''), saveNote: lastSaveNote,
     });
   }
@@ -1101,6 +1310,17 @@
       case 'smaller': setZoom(zoom - 0.1); break;
       case 'ticker': state.ticker = cleanTicker(m.ticker); renderOverlays(); fitText(); saveState(true); break;
       case 'banner': state.banner = String(m.banner || '').trim(); renderOverlays(); render(); saveState(true); break;
+      case 'deckUrl': {
+        const url = String(m.url || '').trim();
+        if (!url || deckKey(url) === deckKey(state.settings.saiUrl)) { await reload(); break; }
+        switchDeck(url); deck = null; renderOverlays();
+        await loadDeck(true); afterEditNoSave(); go(0); saveState(true);
+        break;
+      }
+      case 'settings': videoPreview = null; await applySettings(m.settings || {}); break;
+      case 'videoPreview': videoPreview = { ...state.settings, ...cleanSettings(m.settings || {}) }; render(); break;
+      case 'videoPreviewEnd': videoPreview = null; render(); break;
+      case 'arrange': setArrange(m.on ?? !arranging); break;
       case 'titleSlide': setTitleSlide(m.titleSlide || {}); afterEditNoSave(); saveState(true); break;
       case 'pin': lsSet(LS.pin, String(m.pin || '')); lastSaveNote = 'Sharing…'; saveState(true); break;
     }
@@ -1142,6 +1362,7 @@
 
   function scaleStage() {
     const s = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+    stageScale = s;
     stage.style.transform = `translate(${(window.innerWidth - 1920 * s) / 2}px, ${(window.innerHeight - 1080 * s) / 2}px) scale(${s})`;
   }
   window.addEventListener('resize', scaleStage);
