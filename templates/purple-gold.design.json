@@ -1,0 +1,43 @@
+{
+  "name": "Purple and gold (mandala)",
+  "fonts": "https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=League+Spartan:wght@400;500;600&display=swap",
+  "titleFont": "'Playfair Display', Georgia, serif",
+  "bodyFont": "'League Spartan', 'Segoe UI', Arial, sans-serif",
+  "defaultTone": "dark",
+  "ink": "#FFF5E6",
+  "soft": "#EBD3A8",
+  "accent": "#E9B44C",
+  "panel": "rgba(52, 14, 66, 0.55)",
+  "titleInk": "#FFF5E6",
+  "box": "rgba(48, 12, 62, 0.8)",
+  "strip": "rgba(40, 8, 52, 0.94)",
+  "stripInk": "#FFF5E6",
+  "rule": "rgba(255, 236, 200, 0.2)",
+  "backgrounds": {
+    "title": [
+      {
+        "src": "purple-gold--background.jpg"
+      }
+    ],
+    "lyrics": [
+      {
+        "src": "purple-gold--background.jpg"
+      }
+    ],
+    "info": [
+      {
+        "src": "purple-gold--background.jpg"
+      }
+    ],
+    "card": [
+      {
+        "src": "purple-gold--background.jpg"
+      }
+    ],
+    "darshan": [
+      {
+        "src": "purple-gold--background.jpg"
+      }
+    ]
+  }
+}

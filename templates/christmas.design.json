@@ -1,0 +1,46 @@
+{
+  "name": "Christmas (green and gold)",
+  "fonts": "https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500&family=Belleza&display=swap",
+  "titleFont": "'Playfair Display', Georgia, serif",
+  "bodyFont": "'Belleza', 'Segoe UI', Arial, sans-serif",
+  "defaultTone": "dark",
+  "ink": "#FFF8E7",
+  "soft": "#F3DFA2",
+  "accent": "#F3D36B",
+  "panel": "rgba(8, 40, 24, 0.55)",
+  "titleInk": "#F6DE7C",
+  "box": "rgba(8, 42, 26, 0.82)",
+  "strip": "rgba(6, 34, 20, 0.94)",
+  "stripInk": "#FFF8E7",
+  "rule": "rgba(246, 222, 124, 0.2)",
+  "backgrounds": {
+    "title": [
+      {
+        "src": "christmas--title.jpg"
+      }
+    ],
+    "lyrics": [
+      {
+        "src": "christmas--garland-1.jpg"
+      },
+      {
+        "src": "christmas--garland-2.jpg"
+      }
+    ],
+    "info": [
+      {
+        "src": "christmas--garland-2.jpg"
+      }
+    ],
+    "card": [
+      {
+        "src": "christmas--title.jpg"
+      }
+    ],
+    "darshan": [
+      {
+        "src": "christmas--garland-1.jpg"
+      }
+    ]
+  }
+}

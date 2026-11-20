@@ -1,0 +1,43 @@
+{
+  "name": "Pink and gold (Diwali)",
+  "fonts": "https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Poppins:ital,wght@0,400;0,500;0,600;1,400&display=swap",
+  "titleFont": "'Playfair Display', Georgia, serif",
+  "bodyFont": "'Poppins', 'Segoe UI', Arial, sans-serif",
+  "defaultTone": "dark",
+  "ink": "#FFF4E3",
+  "soft": "#FFD98A",
+  "accent": "#FFC531",
+  "panel": "rgba(84, 10, 62, 0.5)",
+  "titleInk": "#FFD54A",
+  "box": "rgba(80, 10, 60, 0.8)",
+  "strip": "rgba(70, 8, 52, 0.94)",
+  "stripInk": "#FFF4E3",
+  "rule": "rgba(255, 224, 150, 0.22)",
+  "backgrounds": {
+    "title": [
+      {
+        "src": "pink-gold--title.jpg"
+      }
+    ],
+    "lyrics": [
+      {
+        "src": "pink-gold--border.jpg"
+      }
+    ],
+    "info": [
+      {
+        "src": "pink-gold--border.jpg"
+      }
+    ],
+    "card": [
+      {
+        "src": "pink-gold--title.jpg"
+      }
+    ],
+    "darshan": [
+      {
+        "src": "pink-gold--border.jpg"
+      }
+    ]
+  }
+}
