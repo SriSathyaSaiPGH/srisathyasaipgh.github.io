@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link id="template-fonts" rel="stylesheet" href="">
-<link rel="stylesheet" href="app.css?v=2026.11.14-8">
+<link rel="stylesheet" href="app.css?v=2026.11.15-10">
 </head>
 <body>
 
@@ -22,6 +22,7 @@
     <div id="logos"></div>
     <div id="banner" hidden></div>
     <div id="clock" hidden></div>
+    <div id="ticker" hidden><div class="tk-label">Announcements</div><div class="tk-window"><div class="tk-track"></div></div></div>
     <div id="blackout" hidden></div>
   </div>
 </main>
@@ -39,6 +40,7 @@
   <button data-act="reload" class="primary">Reload from list</button>
   <button data-act="editor">Edit slides</button>
   <button data-act="settings">Settings</button>
+  <button data-act="controls" title="Open the control page in its own window (C)">Controls</button>
   <button data-act="fullscreen">Full screen</button>
 </nav>
 
@@ -126,7 +128,7 @@
 
 <dialog id="settings-dialog">
   <form method="dialog" id="settings-form">
-    <h2>Settings <small class="version">version 2026.11.14-8</small></h2>
+    <h2>Settings <small class="version">version 2026.11.15-10</small></h2>
     <label>Sai Rhythms published deck link
       <input name="saiUrl" type="url" required placeholder="https://sairhythms.sathyasai.org/song/slides/…/view">
     </label>
@@ -188,11 +190,42 @@
     </div>
     <label class="check"><input name="showMeaning" type="checkbox"> Show the meaning under each bhajan</label>
     <label class="check"><input name="showSinger" type="checkbox"> Show the singer and pitch under the bhajan title</label>
-    <label class="check"><input name="titleSlide" type="checkbox"> Start with a title slide (center name and date)</label>
+    <fieldset>
+      <legend>Title slide (for this deck only)</legend>
+      <label class="check"><input name="titleSlide" type="checkbox"> Start with a title slide</label>
+      <label>Title
+        <input name="titleText" type="text" maxlength="120">
+      </label>
+      <label>Line under the title
+        <input name="titleSub" type="text" maxlength="160">
+      </label>
+      <small>Leave a box empty to use the center name and date from Sai Rhythms.</small>
+      <label>Or use a picture instead (link)
+        <input name="cover" type="text" placeholder="images/akhanda-cover.png">
+        <small>For a slide designed in Canva: download it as a PNG or JPG (1920 × 1080), upload it to the <code>images</code> folder on GitHub, and type its link here. Leave empty to use the title text.</small>
+      </label>
+    </fieldset>
     <label>Text at the top of every slide (for this deck only)
       <input name="banner" type="text" maxlength="80" placeholder="e.g. Global Akhanda Bhajans 2026">
     </label>
     <label class="check"><input name="showClock" type="checkbox"> Show the current time in the bottom left</label>
+    <fieldset>
+      <legend>Announcements strip (for this deck only)</legend>
+      <label>Announcements, one per line
+        <textarea name="tickerText" rows="3" placeholder="e.g. Prasadam will be served in the hall after Arathi"></textarea>
+      </label>
+      <div class="row">
+        <label class="check"><input name="tickerOn" type="checkbox"> Show the strip</label>
+        <label class="narrow">Speed
+          <select name="tickerSpeed">
+            <option value="slow">Slow</option>
+            <option value="medium">Medium</option>
+            <option value="fast">Fast</option>
+          </select>
+        </label>
+      </div>
+      <small>Easier during a session: press C (or Controls) to open the control page in its own window.</small>
+    </fieldset>
     <fieldset>
       <legend>Logos on every slide</legend>
       <div class="row">
@@ -257,7 +290,7 @@
 
 <div id="toast" role="status" hidden></div>
 
-<script src="config.js?v=2026.11.14-8"></script>
-<script src="app.js?v=2026.11.14-8"></script>
+<script src="config.js?v=2026.11.15-10"></script>
+<script src="app.js?v=2026.11.15-10"></script>
 </body>
 </html>

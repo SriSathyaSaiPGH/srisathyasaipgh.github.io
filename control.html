@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session controls</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎛️</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600&display=swap">
+<style>
+  :root {
+    --bg: #F2F5F9; --card: #FFFFFF; --ink: #1C2B40; --muted: #5D6B7E; --line: #D9E0EA;
+    --accent: #1F5FA6; --accent-ink: #FFFFFF; --gold: #A87F2F; --ok: #1E7A46; --warn: #A15C00; --soft: #E7F0FB;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0F1722; --card: #182333; --ink: #E6ECF4; --muted: #9AA9BC; --line: #2B3A4F;
+      --accent: #5B9BE6; --accent-ink: #0F1722; --gold: #D8B26A; --ok: #5CC98C; --warn: #E8A64A; --soft: #20324A; color-scheme: dark; }
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: 'Jost', 'Segoe UI', Arial, sans-serif; font-size: 16px; line-height: 1.4; }
+  main { max-width: 640px; margin: 0 auto; padding: 16px 14px 40px; display: flex; flex-direction: column; gap: 14px; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  h1 { font-size: 22px; font-weight: 600; margin: 0; }
+  h2 { font-size: 17px; font-weight: 600; margin: 0 0 10px; }
+  .pill { font-size: 13.5px; padding: 4px 12px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+  .pill.ok { color: var(--ok); border-color: currentColor; }
+  .pill.warn { color: var(--warn); border-color: currentColor; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px; }
+  .note { font-size: 14px; color: var(--muted); margin: 8px 0 0; }
+  .now-label { font-size: 13px; color: var(--muted); }
+  .now-title { font-size: 20px; font-weight: 600; margin: 2px 0 0; }
+  .next { margin-top: 10px; padding-left: 12px; border-left: 4px solid var(--gold); }
+  .next .now-title { font-size: 17px; }
+  .meta { color: var(--muted); font-size: 14px; }
+  .count { float: right; color: var(--muted); font-variant-numeric: tabular-nums; font-size: 14px; }
+  button, select, input, textarea { font: inherit; color: var(--ink); }
+  button {
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 10px 14px; cursor: pointer; min-height: 44px;
+  }
+  button:hover { background: var(--soft); }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; font-weight: 600; }
+  button.on { background: var(--soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  button:disabled { opacity: .45; cursor: default; }
+  button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 3px solid #7FB0EA; outline-offset: 2px; }
+  .nav { display: grid; grid-template-columns: 1fr 2fr; gap: 10px; margin-top: 14px; }
+  .nav button { font-size: 20px; min-height: 64px; }
+  .tools { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .tools button { flex: 1 1 auto; font-size: 15px; }
+  label { display: flex; flex-direction: column; gap: 6px; font-size: 14.5px; font-weight: 500; }
+  label.check { flex-direction: row; align-items: center; gap: 10px; font-weight: 400; }
+  textarea, input[type=text], input[type=password], select {
+    width: 100%; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: var(--bg);
+  }
+  textarea { resize: vertical; min-height: 96px; }
+  input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--accent); }
+  .row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; margin-top: 10px; }
+  .row > * { flex: 1 1 140px; }
+  .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; flex-wrap: wrap; }
+  .live { margin-top: 10px; font-size: 14px; color: var(--muted); }
+  .live b { color: var(--ink); font-weight: 500; }
+  ol { list-style: none; margin: 0; padding: 0; max-height: 46vh; overflow-y: auto; }
+  li.sec { font-size: 12.5px; font-weight: 600; color: var(--muted); padding: 12px 8px 4px; }
+  li.item { padding: 9px 10px; border-radius: 10px; cursor: pointer; display: flex; justify-content: space-between; gap: 10px; }
+  li.item:hover { background: var(--soft); }
+  li.item.current { background: var(--soft); outline: 2px solid var(--accent); }
+  li.item .t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  li.item .s { color: var(--muted); font-size: 13.5px; white-space: nowrap; }
+  .pin { display: flex; gap: 8px; margin-top: 10px; }
+  .pin input { flex: 1; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Session controls</h1>
+    <span id="conn" class="pill">Looking for the slides…</span>
+  </header>
+
+  <section class="card" id="remote-note" hidden>
+    <h2>The slides aren’t open in this browser</h2>
+    <p class="note">You can still update the announcements and the top text here; they reach the presenting laptop within about 20 seconds. Moving between slides only works when this page is open in the same browser as the slides.</p>
+  </section>
+
+  <section class="card" id="nav-card">
+    <span class="count" id="count"></span>
+    <div class="now-label">Now showing</div>
+    <div class="now-title" id="now-title">—</div>
+    <div class="next" id="next-wrap" hidden>
+      <div class="now-label">Next</div>
+      <div class="now-title" id="next-title"></div>
+      <div class="meta" id="next-meta"></div>
+    </div>
+    <div class="nav">
+      <button data-cmd="prev" aria-label="Previous">‹ Back</button>
+      <button data-cmd="next" class="primary" aria-label="Next">Next ›</button>
+    </div>
+    <div class="tools">
+      <button data-cmd="blackout" id="btn-black">Black screen</button>
+      <button data-cmd="video" id="btn-video">Darshan video</button>
+      <button data-cmd="smaller" aria-label="Smaller text">A−</button>
+      <button data-cmd="larger" aria-label="Larger text">A+</button>
+      <button data-cmd="reload">Reload from list</button>
+    </div>
+    <p class="note" id="scroll-note" hidden>This bhajan scrolls: Next moves down through the words first.</p>
+  </section>
+
+  <section class="card">
+    <h2>Announcements strip</h2>
+    <label>One announcement per line
+      <textarea id="tk-text" placeholder="e.g. Prasadam will be served in the hall after Arathi"></textarea>
+    </label>
+    <div class="row">
+      <label class="check"><input type="checkbox" id="tk-on"> Show on the slides</label>
+      <label>Speed
+        <select id="tk-speed">
+          <option value="slow">Slow</option>
+          <option value="medium">Medium</option>
+          <option value="fast">Fast</option>
+        </select>
+      </label>
+    </div>
+    <div class="actions">
+      <button id="tk-hide">Hide strip</button>
+      <button id="tk-apply" class="primary">Update the slides</button>
+    </div>
+    <div class="live" id="tk-live"></div>
+  </section>
+
+  <section class="card">
+    <h2>Text at the top of every slide</h2>
+    <label>For this deck only
+      <input type="text" id="banner" maxlength="80" placeholder="e.g. Global Akhanda Bhajans 2026">
+    </label>
+    <div class="actions">
+      <button id="banner-apply" class="primary">Update the slides</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Title slide</h2>
+    <label>Title
+      <input type="text" id="ts-title" maxlength="120">
+    </label>
+    <label style="margin-top:10px">Line under the title
+      <input type="text" id="ts-sub" maxlength="160">
+    </label>
+    <label style="margin-top:10px">Or a picture instead (link)
+      <input type="text" id="ts-cover" placeholder="images/akhanda-cover.png">
+    </label>
+    <p class="note">Leave Title or Line empty to use the center name and date from Sai Rhythms. For a Canva design, upload the picture to the <code>images</code> folder on GitHub and type its link.</p>
+    <div class="actions">
+      <button id="ts-show">Show the title slide</button>
+      <button id="ts-apply" class="primary">Update the slides</button>
+    </div>
+  </section>
+
+  <section class="card" id="share-card" hidden>
+    <h2>Share with other laptops</h2>
+    <p class="note" id="share-note"></p>
+    <div class="pin">
+      <input type="password" id="pin" placeholder="Editing PIN" autocomplete="off">
+      <button id="pin-save">Save</button>
+    </div>
+  </section>
+
+  <section class="card" id="list-card">
+    <h2>Jump to a slide</h2>
+    <ol id="list"></ol>
+  </section>
+</main>
+
+<script src="config.js?v=2026.11.15-10"></script>
+<script>
+(() => {
+  'use strict';
+  const CFG = window.BHAJAN_CONFIG || {};
+  const RELAY = (CFG.relayUrl || '').trim();
+  const $ = s => document.querySelector(s);
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const chan = 'BroadcastChannel' in window ? new BroadcastChannel('bhajan-slides') : null;
+
+  const presenters = new Map();   // id → latest status
+  let status = null;              // the slides window being controlled
+  let tkDirty = false, bannerDirty = false, tsDirty = false;
+
+  function pickTarget() {
+    const now = Date.now();
+    for (const [id, s] of presenters) if (now - s.at > 9000) presenters.delete(id);
+    const all = [...presenters.values()];
+    all.sort((a, b) => (b.fullscreen - a.fullscreen) || (b.visible - a.visible) || (b.at - a.at));
+    return all[0] || null;
+  }
+  function send(cmd, extra = {}) {
+    if (!chan || !status) return;
+    chan.postMessage({ type: 'cmd', target: status.id, cmd, ...extra });
+  }
+
+  function renderStatus() {
+    status = pickTarget();
+    const connected = !!status;
+    const conn = $('#conn');
+    if (connected) {
+      const many = presenters.size > 1;
+      conn.textContent = many ? (status.fullscreen ? 'Controlling the full-screen slides' : `Controlling 1 of ${presenters.size} slide windows`) : 'Connected to the slides';
+      conn.className = 'pill ok';
+    } else {
+      conn.textContent = RELAY ? 'Slides not open in this browser' : 'Open the slides in this browser';
+      conn.className = 'pill warn';
+    }
+    $('#remote-note').hidden = connected || !RELAY;
+    $('#nav-card').hidden = !connected;
+    $('#list-card').hidden = !connected;
+    if (!connected) { if (RELAY) loadRemote(); return; }
+
+    $('#count').textContent = status.total ? `${status.cur + 1} / ${status.total}` : '';
+    $('#now-title').textContent = status.title || '—';
+    const nx = status.next;
+    $('#next-wrap').hidden = !nx;
+    if (nx) {
+      $('#next-title').textContent = nx.title;
+      $('#next-meta').textContent = [nx.singer, nx.pitch ? 'pitch ' + nx.pitch : ''].filter(Boolean).join(', ');
+    }
+    $('#btn-black').classList.toggle('on', !!status.blackout);
+    $('#btn-black').textContent = status.blackout ? 'Black screen is on' : 'Black screen';
+    $('#btn-video').classList.toggle('on', !status.video);
+    $('#btn-video').textContent = status.video ? 'Darshan video' : 'Video is off';
+    $('#scroll-note').hidden = !status.scroll;
+    showTicker(status.ticker, status.banner);
+    showTitleSlide(status.titleSlide);
+    renderList();
+    const share = status.relay && !status.hasPin;
+    $('#share-card').hidden = !share && !/PIN/.test(status.saveNote || '');
+    $('#share-note').textContent = status.saveNote || 'Changes made here are saved on this laptop. Enter the editing PIN to share them with every laptop.';
+  }
+
+  function showTicker(t, banner) {
+    t = t || { text: '', on: false, speed: 'slow' };
+    if (!tkDirty) { $('#tk-text').value = t.text || ''; $('#tk-on').checked = !!t.on; $('#tk-speed').value = t.speed || 'slow'; }
+    if (!bannerDirty) $('#banner').value = banner || '';
+    const lines = (t.text || '').split('\n').filter(s => s.trim()).length;
+    $('#tk-live').innerHTML = t.on && lines ? `On the slides now: <b>${lines} announcement${lines === 1 ? '' : 's'}</b>, ${esc(t.speed)}` : 'The strip is not showing.';
+  }
+
+  function showTitleSlide(t) {
+    t = t || {};
+    $('#ts-title').placeholder = t.origTitle || 'Center name from Sai Rhythms';
+    $('#ts-sub').placeholder = t.origSub || 'Date from Sai Rhythms';
+    if (tsDirty) return;
+    $('#ts-title').value = t.title || ''; $('#ts-sub').value = t.sub || ''; $('#ts-cover').value = t.cover || '';
+  }
+  ['#ts-title', '#ts-sub', '#ts-cover'].forEach(s => $(s).addEventListener('input', () => { tsDirty = true; }));
+  $('#ts-apply').addEventListener('click', () => {
+    tsDirty = false;
+    const t = { title: $('#ts-title').value.trim(), sub: $('#ts-sub').value.trim(), cover: $('#ts-cover').value.trim() };
+    if (status) send('titleSlide', { titleSlide: t }); else saveRemote({ titleSlide: t });
+  });
+  $('#ts-show').addEventListener('click', () => send('gotoTitle'));
+
+  let listSig = '';
+  function renderList() {
+    const sig = JSON.stringify([status.list, status.cur]);
+    if (sig === listSig) return; listSig = sig;
+    const ol = $('#list'); ol.innerHTML = '';
+    let lastSec = null, curIdx = -1;
+    status.list.forEach((s, n) => { if (s.i <= status.cur) curIdx = n; });
+    status.list.forEach((s, n) => {
+      if (s.section && s.section !== lastSec) { const h = document.createElement('li'); h.className = 'sec'; h.textContent = s.section; ol.appendChild(h); lastSec = s.section; }
+      const li = document.createElement('li');
+      li.className = 'item' + (n === curIdx ? ' current' : '');
+      li.innerHTML = `<span class="t">${esc(s.title)}</span><span class="s">${esc(s.song ? [s.singer, s.pitch].filter(Boolean).join(', ') : (s.added ? 'added' : ''))}</span>`;
+      li.addEventListener('click', () => send('goto', { i: s.i }));
+      ol.appendChild(li);
+    });
+    const c = ol.querySelector('.current'); if (c) c.scrollIntoView({ block: 'nearest' });
+  }
+
+  /* --- same browser: talk to the slides window --- */
+  if (chan) {
+    chan.onmessage = ev => { const m = ev.data || {}; if (m.type === 'status') { presenters.set(m.id, m); renderStatus(); } };
+    const hello = () => chan.postMessage({ type: 'hello' });
+    hello(); setInterval(() => { hello(); setTimeout(renderStatus, 600); }, 3000);
+  }
+  setTimeout(renderStatus, 800);
+
+  document.querySelectorAll('[data-cmd]').forEach(b => b.addEventListener('click', () => send(b.dataset.cmd)));
+  document.addEventListener('keydown', e => {
+    if (e.target.matches('input, textarea, select')) return;
+    if (['ArrowRight', 'PageDown', ' '].includes(e.key)) { e.preventDefault(); send('next'); }
+    if (['ArrowLeft', 'PageUp'].includes(e.key)) { e.preventDefault(); send('prev'); }
+  });
+
+  let tkOnTouched = false;
+  $('#tk-text').addEventListener('input', () => {
+    tkDirty = true;
+    if (!tkOnTouched && $('#tk-text').value.trim()) $('#tk-on').checked = true;   // new text is meant to be shown
+  });
+  $('#tk-on').addEventListener('change', () => { tkDirty = true; tkOnTouched = true; });
+  $('#tk-speed').addEventListener('change', () => { tkDirty = true; });
+  $('#banner').addEventListener('input', () => { bannerDirty = true; });
+
+  function tickerFromForm(on) {
+    return { text: $('#tk-text').value.trim(), on: on ?? $('#tk-on').checked, speed: $('#tk-speed').value };
+  }
+  $('#tk-apply').addEventListener('click', () => {
+    const t = tickerFromForm();
+    tkDirty = false; tkOnTouched = false;
+    if (status) send('ticker', { ticker: t }); else saveRemote({ ticker: t });
+  });
+  $('#tk-hide').addEventListener('click', () => {
+    $('#tk-on').checked = false; tkDirty = false;
+    const t = tickerFromForm(false);
+    if (status) send('ticker', { ticker: t }); else saveRemote({ ticker: t });
+  });
+  $('#banner-apply').addEventListener('click', () => {
+    bannerDirty = false;
+    const b = $('#banner').value.trim();
+    if (status) send('banner', { banner: b }); else saveRemote({ banner: b });
+  });
+  $('#pin-save').addEventListener('click', () => {
+    const pin = $('#pin').value.trim(); if (!pin) return;
+    if (status) send('pin', { pin }); else { localStorage.setItem('bs.pin.v1', JSON.stringify(pin)); $('#share-note').textContent = 'PIN saved on this device.'; }
+    $('#pin').value = '';
+  });
+
+  /* --- another device: read and save the shared settings through the relay --- */
+  const deckKey = url => String(url || '').trim().replace(/[?#].*$/, '').replace(/\/+$/, '').toLowerCase();
+  let remoteLoaded = 0;
+  async function getRemote() {
+    const res = await fetch(RELAY + (RELAY.includes('?') ? '&' : '?') + 'action=state');
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'The relay could not load the settings.');
+    return data.state || { settings: {}, decks: {} };
+  }
+  async function loadRemote() {
+    if (Date.now() - remoteLoaded < 15000) return;
+    remoteLoaded = Date.now();
+    try {
+      const s = await getRemote();
+      const d = (s.decks || {})[deckKey((s.settings || {}).saiUrl || CFG.defaultSaiRhythmsUrl)] || {};
+      showTicker(d.ticker, d.banner);
+      const e = (d.edits || {}).__title__ || {};
+      showTitleSlide({ title: e.title || '', sub: e.sub || '', cover: d.cover || '' });
+    } catch (e) { $('#tk-live').textContent = 'Couldn’t read the shared settings: ' + e.message; }
+  }
+  async function saveRemote(change) {
+    if (!RELAY) { $('#tk-live').textContent = 'Open the slides in this browser first.'; return; }
+    let pin = '';
+    try { pin = JSON.parse(localStorage.getItem('bs.pin.v1') || '""'); } catch { }
+    if (!pin) {
+      $('#share-card').hidden = false;
+      $('#share-note').textContent = 'Enter the editing PIN once on this device, then press Update again.';
+      return;
+    }
+    $('#tk-live').textContent = 'Saving…';
+    try {
+      const s = await getRemote();
+      s.settings = s.settings || {}; s.decks = s.decks || {};
+      const key = deckKey(s.settings.saiUrl || CFG.defaultSaiRhythmsUrl);
+      const d = s.decks[key] = s.decks[key] || {};
+      if (change.ticker) d.ticker = change.ticker;
+      if ('banner' in change) d.banner = change.banner;
+      if (change.titleSlide) {
+        const t = change.titleSlide, e = {};
+        if (t.title) e.title = t.title;
+        if (t.sub) e.sub = t.sub;
+        d.edits = d.edits || {};
+        if (Object.keys(e).length) d.edits.__title__ = e; else delete d.edits.__title__;
+        d.cover = t.cover || '';
+      }
+      const res = await fetch(RELAY, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action: 'saveState', pin, state: s }) });
+      const r = await res.json();
+      if (r.error === 'wrong-pin') { localStorage.removeItem('bs.pin.v1'); $('#share-card').hidden = false; $('#share-note').textContent = 'That PIN didn’t match. Enter it again.'; $('#tk-live').textContent = ''; return; }
+      if (!r.ok) throw new Error(r.error || 'unknown error');
+      remoteLoaded = 0;
+      $('#tk-live').textContent = 'Saved. The presenting laptop picks this up within about 20 seconds.';
+    } catch (e) { $('#tk-live').textContent = 'Couldn’t save: ' + e.message; }
+  }
+})();
+</script>
+</body>
+</html>

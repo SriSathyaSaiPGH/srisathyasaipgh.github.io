@@ -296,3 +296,39 @@ dialog legend { font-size: 14.5px; font-weight: 600; padding: 0 6px; }
 }
 
 dialog h2 .version { font-size: 13px; font-weight: 400; color: var(--ui-muted); margin-left: 8px; }
+
+/* ---------- Announcements strip ---------- */
+#ticker {
+  position: absolute; z-index: 5; left: 0; right: 0; bottom: 0; height: 66px;
+  display: flex; align-items: stretch;
+  background: rgba(19, 40, 74, 0.9); color: #FFFFFF;
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+}
+#ticker .tk-label {
+  flex: none; display: flex; align-items: center; padding: 0 28px 0 36px;
+  font-family: var(--title-font); font-weight: 700; font-size: 24px; letter-spacing: 0.05em;
+  background: var(--accent); color: #FFFFFF;
+}
+#ticker .tk-window {
+  flex: 1; overflow: hidden; position: relative;
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 40px, #000 calc(100% - 40px), transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0, #000 40px, #000 calc(100% - 40px), transparent 100%);
+}
+#ticker .tk-track { display: flex; width: max-content; height: 100%; align-items: center; will-change: transform; }
+#ticker .tk-run { display: flex; align-items: center; flex: none; }
+#ticker .tk-item { font-size: 32px; font-weight: 500; white-space: nowrap; padding: 0 30px; }
+#ticker .tk-sep { color: var(--accent); font-size: 22px; }
+@keyframes tk-scroll { from { transform: translateX(0); } to { transform: translateX(var(--tk-shift, -50%)); } }
+#stage.has-ticker .col { bottom: 250px; }
+#stage.has-ticker #next-box { bottom: 92px; }
+#stage.has-ticker #clock { bottom: 92px; }
+#stage.has-ticker .logo.bottom-left { bottom: 88px; }
+
+/* ---------- Title slide ---------- */
+#stage.is-title #banner { display: none !important; }
+#stage.is-cover .logo, #stage.is-cover #next-box, #stage.is-cover #clock { display: none !important; }
+.cover { position: absolute; inset: 0; background: #0E1A2B; }
+.cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cover .cover-msg { display: none; position: absolute; inset: 0; place-items: center; color: #FFFFFF; font-size: 34px; padding: 0 200px; text-align: center; }
+.cover.broken img { display: none; }
+.cover.broken .cover-msg { display: grid; }

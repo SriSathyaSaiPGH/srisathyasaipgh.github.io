@@ -33,7 +33,7 @@
     videoFeather: 35,   // % of the video area that fades into the slide
   };
 
-  let state = { settings: { ...DEFAULT_SETTINGS }, decks: {}, custom: [], hide: [], unhide: [], edits: {} };
+  let state = { settings: { ...DEFAULT_SETTINGS }, decks: {}, custom: [], hide: [], unhide: [], edits: {}, banner: '', ticker: { text: '', on: false, speed: 'slow' } };
   let loadError = '';
   let deck = null;          // { fetchedAt, raw }
   let model = null;         // normalized deck
@@ -94,7 +94,7 @@
     if (!RELAY) return;
     try {
       const data = await relayGet({ action: 'state' });
-      if (data.state) { mergeState(data.state); lsSet(LS.state, state); }
+      if (data.state) { lastShared = JSON.stringify(data.state); mergeState(data.state); lsSet(LS.state, state); }
     } catch (e) {
       toast('Could not load the shared slide settings, so this laptop’s last copy is being used. ' + e.message, true, 8000);
     }
@@ -102,6 +102,10 @@
   // Added slides, hidden slides and edits belong to one Sai Rhythms deck, so they're kept per deck link.
   // state.custom / hide / unhide / edits are the working copy for the deck currently selected.
   const deckKey = url => String(url || '').trim().replace(/[?#].*$/, '').replace(/\/+$/, '').toLowerCase();
+  function cleanTicker(t) {
+    t = t && typeof t === 'object' ? t : {};
+    return { text: typeof t.text === 'string' ? t.text : '', on: !!t.on, speed: ['slow', 'medium', 'fast'].includes(t.speed) ? t.speed : 'slow' };
+  }
   function cleanDeckData(d) {
     d = d || {};
     return {
@@ -110,6 +114,8 @@
       unhide: Array.isArray(d.unhide) ? d.unhide : [],
       edits: d.edits && typeof d.edits === 'object' ? d.edits : {},
       banner: typeof d.banner === 'string' ? d.banner : '',
+      ticker: cleanTicker(d.ticker),
+      cover: typeof d.cover === 'string' ? d.cover : '',
     };
   }
   function mergeState(s) {
@@ -120,7 +126,7 @@
     state = { settings, decks, ...cleanDeckData(decks[deckKey(settings.saiUrl)]) };
   }
   function stashDeckData() {
-    state.decks[deckKey(state.settings.saiUrl)] = { custom: state.custom, hide: state.hide, unhide: state.unhide, edits: state.edits, banner: state.banner };
+    state.decks[deckKey(state.settings.saiUrl)] = { custom: state.custom, hide: state.hide, unhide: state.unhide, edits: state.edits, banner: state.banner, ticker: state.ticker, cover: state.cover };
   }
   function switchDeck(newUrl) {
     stashDeckData();
@@ -129,6 +135,8 @@
   }
 
   let saveTimer = null;
+  let lastSaveNote = '';
+  let lastShared = '';   // the shared state as last saved or loaded, to spot changes made elsewhere
   function pruneOld() {
     const now = model && Date.parse(model.date);
     if (!now) return;
@@ -136,23 +144,28 @@
     state.custom = state.custom.filter(c => !old(c.onlyDate));
     for (const k of Object.keys(state.edits)) if (old(state.edits[k].onlyDate)) delete state.edits[k];
   }
-  function saveState() {
+  let quietSave = false;
+  function saveState(quiet = false) {
+    quietSave = quiet;
     pruneOld();
     stashDeckData();
     lsSet(LS.state, state);
     setEditorStatus(RELAY ? 'Saving…' : 'Saved on this laptop (preview mode).');
     if (!RELAY) return;
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(pushState, 600);
+    lastLocalSave = Date.now();
+    saveTimer = setTimeout(() => { saveTimer = null; pushState(); }, 600);
   }
   async function pushState(retry = true) {
     let pin = lsGet(LS.pin, '');
+    if (!pin && quietSave) { setEditorStatus('Not shared yet: saved on this laptop only.'); lastSaveNote = 'Saved on this laptop only. Enter the PIN here to share with other laptops.'; broadcastStatus(); return; }
     if (!pin) { pin = await askPin(); if (!pin) { setEditorStatus('Not shared yet: saved on this laptop only. Enter the PIN to share changes.'); return; } }
     try {
       const r = await relayPost({ action: 'saveState', pin, state });
-      if (r.ok) { lsSet(LS.pin, pin); setEditorStatus('Saved for every laptop.'); return; }
+      if (r.ok) { lsSet(LS.pin, pin); setEditorStatus('Saved for every laptop.'); lastSaveNote = 'Saved for every laptop.'; lastShared = JSON.stringify(state); broadcastStatus(); return; }
       if (r.error === 'wrong-pin') {
         lsSet(LS.pin, '');
+        if (quietSave) { lastSaveNote = 'Not shared: the PIN didn’t match. Saved on this laptop only.'; broadcastStatus(); return; }
         if (retry) { toast('That PIN didn’t match. Try again.', true); return pushState(false); }
         setEditorStatus('Not shared: the PIN didn’t match. Changes are saved on this laptop only.');
         return;
@@ -429,6 +442,7 @@
   }
 
   function render() {
+    queueMicrotask(broadcastStatus);
     const p = pages[cur];
     $('#counter').textContent = pages.length ? `${cur + 1} / ${pages.length}` : '0 / 0';
     highlightEditorRow();
@@ -446,6 +460,8 @@
     if (p.kind === 'darshan') setGeom('vs-big');
     else if (wantVideo) { setGeom(vs.videoSide === 'right' ? 'vs-right' : 'vs-left'); colClass = vs.videoSide === 'right' ? 'left' : 'right'; }
     stage.classList.toggle('video-on', p.kind === 'darshan' || wantVideo);
+    stage.classList.toggle('is-title', p.kind === 'title');                 // no top text on the title slide
+    stage.classList.toggle('is-cover', p.kind === 'title' && !!state.cover); // a full picture replaces the title slide
     layoutVideo();
     player.setActive(wantVideo);
 
@@ -466,6 +482,7 @@
     const pageNote = p.pageCount > 1 ? `<div class="s-page">${p.pageNo} of ${p.pageCount}</div>` : '';
     switch (p.kind) {
       case 'title':
+        if (state.cover) return `<div class="cover"><img src="${esc(absUrl(state.cover))}" alt="${esc(it.title)}" onerror="this.closest('.cover').classList.add('broken')"><div class="cover-msg">The title picture couldn’t be loaded. Check its link in Settings → Title slide.</div></div>`;
         return `<div class="col full"><div class="s-hero"><div class="s-card">${esc(it.title)}</div>${it.date ? `<div class="s-card-sub">${esc(it.date)}</div>` : ''}</div></div>`;
       case 'card':
         return `<div class="col ${colClass === 'center' ? 'full' : colClass}"><div class="s-card">${esc(title)}</div></div>`;
@@ -496,7 +513,7 @@
     const over = () => box.scrollHeight > box.clientHeight + 2 || box.scrollHeight > col.clientHeight + 2 || col.scrollHeight > col.clientHeight + 2 || box.scrollWidth > box.clientWidth + 2;
     let guard = 0;
     const sc = box.querySelector('.scroller');
-    const floor = sc && scrollMode() ? 0.72 * zoom : 0.42;   // below this size, scroll instead of shrinking
+    const floor = sc && scrollMode() ? (sc.classList.contains('s-lyrics') ? 0.72 : 0.6) * zoom : 0.42;   // below this size, scroll instead of shrinking
     const shrink = () => { while (over() && k > floor && guard++ < 60) { k -= 0.04; stage.style.setProperty('--k', k.toFixed(2)); } };
     shrink();
     // Zoomed in but no room: the lyrics matter more than the meaning, so drop the meaning and try again.
@@ -782,6 +799,22 @@
     afterEdit();
   });
 
+  /* title slide: text and optional picture */
+  function titleOrig() { return { title: (model && model.name) || 'Devotional session', sub: (model && model.date) || '' }; }
+  function titleSlideInfo() {
+    const e = state.edits.__title__ || {}, o = titleOrig();
+    return { title: typeof e.title === 'string' ? e.title : '', sub: typeof e.sub === 'string' ? e.sub : '', origTitle: o.title, origSub: o.sub, cover: state.cover || '' };
+  }
+  // Empty boxes mean "use what Sai Rhythms has" (center name and date).
+  function setTitleSlide({ title, sub, cover }) {
+    const o = titleOrig(), e = {};
+    title = String(title || '').trim(); sub = String(sub || '').trim();
+    if (title && title !== o.title) e.title = title;
+    if (sub && sub !== o.sub) e.sub = sub;
+    if (Object.keys(e).length) state.edits.__title__ = e; else delete state.edits.__title__;
+    if (cover !== undefined) state.cover = String(cover || '').trim();
+  }
+
   /* ---------------- text size (zoom) ---------------- */
   function setZoom(z) {
     const nz = Math.round(Math.max(0.6, Math.min(1.8, z)) * 10) / 10;
@@ -798,7 +831,31 @@
 
   /* ---------------- banner text and clock ---------------- */
   let clockTimer = null;
+  const TICKER_SPEED = { slow: 70, medium: 105, fast: 150 };   // stage pixels per second
+  let tickerSig = '';
+  function renderTicker() {
+    const t = state.ticker || cleanTicker();
+    const items = (t.text || '').split('\n').map(s => s.trim()).filter(Boolean);
+    const on = t.on && items.length > 0;
+    stage.classList.toggle('has-ticker', on);
+    const el = $('#ticker');
+    el.hidden = !on;
+    if (!on) { tickerSig = ''; return; }
+    const sig = JSON.stringify([items, t.speed]);
+    if (sig === tickerSig) return;              // unchanged: don't restart the scroll
+    tickerSig = sig;
+    const run = items.map(s => `<span class="tk-item">${esc(s)}</span><span class="tk-sep">✦</span>`).join('');
+    const track = el.querySelector('.tk-track');
+    track.style.animation = 'none';
+    track.innerHTML = `<div class="tk-run">${run}</div><div class="tk-run" aria-hidden="true">${run}</div>`;
+    requestAnimationFrame(() => {
+      const w = track.firstElementChild.offsetWidth || 1000;
+      track.style.setProperty('--tk-shift', -w + 'px');
+      track.style.animation = `tk-scroll ${(w / (TICKER_SPEED[t.speed] || 70)).toFixed(1)}s linear infinite`;
+    });
+  }
   function renderOverlays() {
+    renderTicker();
     const b = $('#banner'), text = (state.banner || '').trim();
     b.textContent = text; b.hidden = !text;
     stage.classList.toggle('has-banner', !!text);
@@ -841,6 +898,8 @@
     f.maxLines.value = s.maxLines; f.longText.value = s.longText || 'scroll'; f.showMeaning.checked = s.showMeaning; f.showSinger.checked = s.showSinger; f.titleSlide.checked = s.titleSlide;
     for (const n of VIDEO_FIELDS) f[n].value = s[n];
     f.banner.value = state.banner || ''; f.showClock.checked = !!s.showClock;
+    { const t = titleSlideInfo(); f.titleText.value = t.title; f.titleText.placeholder = t.origTitle; f.titleSub.value = t.sub; f.titleSub.placeholder = t.origSub || 'Line under the title'; f.cover.value = t.cover; }
+    f.tickerText.value = (state.ticker && state.ticker.text) || ''; f.tickerOn.checked = !!(state.ticker && state.ticker.on); f.tickerSpeed.value = (state.ticker && state.ticker.speed) || 'slow';
     showRangeValues();
     f.logo1.value = s.logo1 || ''; f.logo1Pos.value = s.logo1Pos || 'off'; f.logo2.value = s.logo2 || ''; f.logo2Pos.value = s.logo2Pos || 'off'; f.logoSize.value = s.logoSize || 'medium';
     $('#settings-dialog').showModal();
@@ -864,8 +923,15 @@
     const urlChanged = newUrl !== s.saiUrl;
     const tplChanged = f.template.value !== s.template;
     const typedBanner = f.banner.value.trim(), bannerBefore = state.banner || '';
+    const tickerBefore = cleanTicker(state.ticker);
+    const titleBefore = titleSlideInfo();
+    const typedTitle = { title: f.titleText.value.trim(), sub: f.titleSub.value.trim(), cover: f.cover.value.trim() };
     if (urlChanged) switchDeck(newUrl);           // the newly chosen deck brings its own top text…
     if (!urlChanged || typedBanner !== bannerBefore) state.banner = typedBanner;   // …unless it was just changed here
+    const typedTicker = cleanTicker({ text: f.tickerText.value.trim(), on: f.tickerOn.checked, speed: f.tickerSpeed.value });
+    if (!urlChanged || JSON.stringify(typedTicker) !== JSON.stringify(tickerBefore)) state.ticker = typedTicker;
+    const titleTouched = typedTitle.title !== titleBefore.title || typedTitle.sub !== titleBefore.sub || typedTitle.cover !== titleBefore.cover;
+    if (!urlChanged || titleTouched) setTitleSlide(typedTitle);
     Object.assign(s, {
       showClock: f.showClock.checked,
       videos: f.videos.value.trim(), videoOn: f.videoOn.value, template: f.template.value,
@@ -940,7 +1006,7 @@
   }
   $('#controls').addEventListener('click', e => {
     const b = e.target.closest('[data-act]'); if (!b) return;
-    ({ prev: () => retreat(), next: () => advance(), reload, editor: () => toggleEditor(), settings: openSettings, fullscreen, smaller: () => setZoom(zoom - 0.1), larger: () => setZoom(zoom + 0.1) })[b.dataset.act]();
+    ({ prev: () => retreat(), next: () => advance(), reload, editor: () => toggleEditor(), settings: openSettings, controls: openControls, fullscreen, smaller: () => setZoom(zoom - 0.1), larger: () => setZoom(zoom + 0.1) })[b.dataset.act]();
   });
   $('#editor').addEventListener('click', e => {
     const b = e.target.closest('[data-act]'); if (!b) return;
@@ -970,6 +1036,7 @@
     else if (k === '+' || k === '=' || k === 'Add') { e.preventDefault(); setZoom(zoom + 0.1); }
     else if (k === '-' || k === '_' || k === 'Subtract') { e.preventDefault(); setZoom(zoom - 0.1); }
     else if (k === '0') setZoom(1);
+    else if (k === 'c' || k === 'C') openControls();
     else if (k === 'Escape') toggleEditor(false);
   });
 
@@ -991,6 +1058,79 @@
     cur = idx >= 0 ? idx : Math.min(cur, Math.max(0, pages.length - 1));
     render(); if (!$('#editor').hidden) renderEditor();
   }
+
+  /* ---------------- control page link ---------------- */
+  // The control page (control.html) talks to this window through a BroadcastChannel (same browser, instant).
+  const myId = Math.random().toString(36).slice(2, 9);
+  const chan = 'BroadcastChannel' in window ? new BroadcastChannel('bhajan-slides') : null;
+  function slideListForControl() {
+    const out = []; let last = null;
+    pages.forEach((p, i) => {
+      if (p.en === last) return; last = p.en;
+      const it = p.en.item, c = p.en.custom;
+      out.push({ i, title: it ? it.title : (c.title || (c.type === 'darshan' ? 'Darshan video' : 'Added slide')), section: it ? it.slot : (c.slot || ''), song: !!(it && it.isSong), singer: it && it.isSong ? it.singer : '', pitch: it && it.isSong ? it.pitch : '', added: !!c });
+    });
+    return out;
+  }
+  function broadcastStatus() {
+    if (!chan) return;
+    const p = pages[cur];
+    const title = p ? (p.en.item ? p.en.item.title : (p.en.custom.title || 'Added slide')) : '';
+    chan.postMessage({
+      type: 'status', id: myId, fullscreen: !!document.fullscreenElement, visible: document.visibilityState === 'visible', at: Date.now(),
+      cur, total: pages.length, title, next: p && p.next ? { title: p.next.title, singer: p.next.isSong ? p.next.singer : '', pitch: p.next.isSong ? p.next.pitch : '' } : null,
+      scroll: !!scroller(), blackout, video: videoForced, zoom,
+      deck: model ? { name: model.name, date: model.date } : null, saiUrl: state.settings.saiUrl,
+      banner: state.banner || '', ticker: cleanTicker(state.ticker), titleSlide: titleSlideInfo(), list: slideListForControl(),
+      relay: !!RELAY, hasPin: !!lsGet(LS.pin, ''), saveNote: lastSaveNote,
+    });
+  }
+  if (chan) chan.onmessage = async ev => {
+    const m = ev.data || {};
+    if (m.type === 'hello') { broadcastStatus(); return; }
+    if (m.type !== 'cmd' || (m.target && m.target !== myId)) return;
+    switch (m.cmd) {
+      case 'next': advance(); break;
+      case 'prev': retreat(); break;
+      case 'goto': go(+m.i || 0); break;
+      case 'gotoTitle': { const t = pages.findIndex(p => p.kind === 'title'); if (t >= 0) go(t); else toast('The title slide is turned off in Settings.', false, 3000); break; }
+      case 'blackout': blackout = !blackout; $('#blackout').hidden = !blackout; break;
+      case 'video': videoForced = !videoForced; render(); break;
+      case 'reload': await reload(); break;
+      case 'larger': setZoom(zoom + 0.1); break;
+      case 'smaller': setZoom(zoom - 0.1); break;
+      case 'ticker': state.ticker = cleanTicker(m.ticker); renderOverlays(); fitText(); saveState(true); break;
+      case 'banner': state.banner = String(m.banner || '').trim(); renderOverlays(); render(); saveState(true); break;
+      case 'titleSlide': setTitleSlide(m.titleSlide || {}); afterEditNoSave(); saveState(true); break;
+      case 'pin': lsSet(LS.pin, String(m.pin || '')); lastSaveNote = 'Sharing…'; saveState(true); break;
+    }
+    broadcastStatus();
+  };
+  document.addEventListener('fullscreenchange', () => broadcastStatus());
+  document.addEventListener('visibilitychange', () => broadcastStatus());
+  function openControls() {
+    const w = window.open('control.html', 'bhajan-controls', 'width=560,height=900');
+    if (!w) toast('Your browser blocked the new window. Open srisathyasaipgh.github.io/control.html in a new window instead.', true, 9000);
+  }
+
+  // Changes saved on another laptop (or from a phone) reach this screen within about 20 seconds.
+  async function pollShared() {
+    if (!RELAY || document.querySelector('dialog[open]') || !$('#editor').hidden || saveTimer && Date.now() - lastLocalSave < 3000) return;
+    try {
+      const data = await relayGet({ action: 'state' });
+      if (!data.state) return;
+      const incoming = JSON.stringify(data.state);
+      if (incoming === lastShared) return;
+      lastShared = incoming;
+      const urlBefore = state.settings.saiUrl;
+      mergeState(data.state); lsSet(LS.state, state);
+      await applySharedChanges();
+      if (deckKey(urlBefore) !== deckKey(state.settings.saiUrl)) await loadDeck(true);
+      afterEditNoSave();
+    } catch { /* try again next time */ }
+  }
+  let lastLocalSave = 0;
+  if (RELAY) setInterval(pollShared, 20000);
 
   let idleTimer = null;
   function wake() {
