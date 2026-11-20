@@ -1,0 +1,53 @@
+{
+  "name": "Akhanda (sky and doves)",
+  "fonts": "https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Jost:ital,wght@0,400;0,500;0,600;1,400&display=swap",
+  "titleFont": "'Cinzel', Georgia, serif",
+  "bodyFont": "'Jost', 'Segoe UI', Arial, sans-serif",
+  "ink": "#13284A",
+  "soft": "#3A5274",
+  "accent": "#A87F2F",
+  "panel": "rgba(255, 255, 255, 0.62)",
+  "titleInk": "#FFFFFF",
+  "backgrounds": {
+    "title": [
+      {
+        "src": "akhanda--title.jpg"
+      }
+    ],
+    "lyrics": [
+      {
+        "src": "akhanda--song-1.jpg",
+        "text": "right"
+      },
+      {
+        "src": "akhanda--song-2.jpg",
+        "text": "left"
+      },
+      {
+        "src": "akhanda--song-3.jpg",
+        "text": "left"
+      }
+    ],
+    "info": [
+      {
+        "src": "akhanda--card.jpg"
+      },
+      {
+        "src": "akhanda--sky.jpg"
+      }
+    ],
+    "card": [
+      {
+        "src": "akhanda--card.jpg"
+      },
+      {
+        "src": "akhanda--prayer.jpg"
+      }
+    ],
+    "darshan": [
+      {
+        "src": "akhanda--sky.jpg"
+      }
+    ]
+  }
+}
