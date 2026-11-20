@@ -1,4 +1,34 @@
 [
-  { "id": "akhanda", "name": "Akhanda (sky and doves)" },
-  { "id": "plain", "name": "Plain light" }
+  {
+    "id": "akhanda",
+    "name": "Akhanda (sky and doves)"
+  },
+  {
+    "id": "plain",
+    "name": "Plain light"
+  },
+  {
+    "id": "purple-gold",
+    "name": "Purple and gold (mandala)"
+  },
+  {
+    "id": "diwali-arch",
+    "name": "Diwali arch (purple)"
+  },
+  {
+    "id": "maroon-gold",
+    "name": "Maroon and gold"
+  },
+  {
+    "id": "pink-gold",
+    "name": "Pink and gold (Diwali)"
+  },
+  {
+    "id": "diwali-pastel",
+    "name": "Diwali pastel (light and dark)"
+  },
+  {
+    "id": "christmas",
+    "name": "Christmas (green and gold)"
+  }
 ]
