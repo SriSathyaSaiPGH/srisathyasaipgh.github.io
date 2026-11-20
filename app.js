@@ -413,25 +413,42 @@
     if (!found) {
       const res = await fetch(`https://api.github.com/repos/${host[1]}/${repo}/contents/templates`);
       if (!res.ok) return;
-      const dirs = (await res.json()).filter(f => f.type === 'dir').map(f => f.name);
+      const entries = await res.json();
+      // a design is either a folder (templates/<id>/template.json) or loose files (templates/<id>.design.json + <id>--*.jpg)
+      const ids = [...entries.filter(f => f.type === 'dir').map(f => f.name),
+                   ...entries.filter(f => f.type === 'file' && /^[a-z0-9-]+\.design\.json$/.test(f.name)).map(f => f.name.replace(/\.design\.json$/, ''))];
       const known = new Set(templates.map(t => t.id));
       found = [];
-      for (const id of dirs) {
+      for (const id of [...new Set(ids)]) {
         if (known.has(id)) continue;
-        try { const t = await (await fetch(`templates/${id}/template.json`)).json(); found.push({ id, name: t.name || id }); } catch { }
+        const t = await fetchDesign(id);
+        if (t) found.push({ id, name: t.name || id });
       }
       try { sessionStorage.setItem(cacheKey, JSON.stringify({ at: Date.now(), list: found })); } catch { }
     }
     const have = new Set(templates.map(t => t.id));
     for (const t of found) if (!have.has(t.id)) templates.push(t);
   }
+  // Reads a design in either layout; remembers where its pictures are.
+  async function fetchDesign(id) {
+    const tries = [[`templates/${id}.design.json`, 'templates/'], [`templates/${id}/template.json`, `templates/${id}/`]];
+    for (const [url, base] of tries) {
+      try {
+        const res = await fetch(url, { cache: 'no-store' });
+        if (!res.ok) continue;
+        const t = await res.json(); t.base = base; return t;
+      } catch { }
+    }
+    return null;
+  }
   async function applyTemplate(id) {
     const tid = templates.some(t => t.id === id) ? id : (templates[0] && templates[0].id) || 'akhanda';
     try {
-      const t = await (await fetch(`templates/${tid}/template.json`, { cache: 'no-store' })).json();
+      const t = await fetchDesign(tid);
+      if (!t) throw new Error('not found');
       t.id = tid; template = t;
     } catch {
-      template = { id: tid, backgrounds: {} };
+      template = { id: tid, base: '', backgrounds: {} };
       toast('That design could not be loaded, so plain colours are used.', true);
     }
     $('#template-fonts').href = template.fonts || '';
@@ -439,7 +456,7 @@
     stage.style.setProperty('--body-font', template.bodyFont || "'Segoe UI', Arial, sans-serif");
     currentTone = ''; setTone(template.defaultTone || 'light');
     // preload images
-    Object.values(template.backgrounds || {}).flat().forEach(b => { if (b.src) { const i = new Image(); i.src = `templates/${tid}/${b.src}`; } });
+    Object.values(template.backgrounds || {}).flat().forEach(b => { if (b.src) { const i = new Image(); i.src = (template.base || `templates/${tid}/`) + b.src; } });
   }
   /* Colours: a design gives one palette, and optionally a second ("dark") palette for backgrounds
      marked "tone": "dark" (light text on dark glass). Designs whose backgrounds are all dark just
@@ -466,7 +483,7 @@
   }
   let bgFlip = false, lastBg = '';
   function setBackground(bg) {
-    const css = bg.src ? `url("templates/${template.id}/${bg.src}")` : (bg.css || '#DCE9F6');
+    const css = bg.src ? `url("${template.base || `templates/${template.id}/`}${bg.src}")` : (bg.css || '#DCE9F6');
     if (css === lastBg) return;
     lastBg = css;
     const a = $('#bg-a'), b = $('#bg-b');
