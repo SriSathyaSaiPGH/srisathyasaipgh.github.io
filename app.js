@@ -15,6 +15,7 @@
     videos: '',
     videoOn: 'lyrics',
     maxLines: 10,
+    longText: 'scroll',   // 'scroll' within one slide, or 'split' across slides
     showMeaning: true,
     showSinger: true,
     titleSlide: true,
@@ -23,6 +24,7 @@
     logo2: 'images/sssio-100.png',
     logo2Pos: 'top-right',
     logoSize: 'medium',
+    showClock: true,
     videoSide: 'left',
     videoWidth: 45,     // % of the slide width
     videoZoom: 130,     // %
@@ -31,7 +33,8 @@
     videoFeather: 35,   // % of the video area that fades into the slide
   };
 
-  let state = { settings: { ...DEFAULT_SETTINGS }, custom: [], hide: [], unhide: [], edits: {} };
+  let state = { settings: { ...DEFAULT_SETTINGS }, decks: {}, custom: [], hide: [], unhide: [], edits: {} };
+  let loadError = '';
   let deck = null;          // { fetchedAt, raw }
   let model = null;         // normalized deck
   let seq = [];             // every entry incl. hidden (for the editor)
@@ -96,14 +99,33 @@
       toast('Could not load the shared slide settings, so this laptop’s last copy is being used. ' + e.message, true, 8000);
     }
   }
-  function mergeState(s) {
-    state = {
-      settings: { ...DEFAULT_SETTINGS, ...(s.settings || {}) },
-      custom: Array.isArray(s.custom) ? s.custom : [],
-      hide: Array.isArray(s.hide) ? s.hide : [],
-      unhide: Array.isArray(s.unhide) ? s.unhide : [],
-      edits: s.edits && typeof s.edits === 'object' ? s.edits : {},
+  // Added slides, hidden slides and edits belong to one Sai Rhythms deck, so they're kept per deck link.
+  // state.custom / hide / unhide / edits are the working copy for the deck currently selected.
+  const deckKey = url => String(url || '').trim().replace(/[?#].*$/, '').replace(/\/+$/, '').toLowerCase();
+  function cleanDeckData(d) {
+    d = d || {};
+    return {
+      custom: Array.isArray(d.custom) ? d.custom : [],
+      hide: Array.isArray(d.hide) ? d.hide : [],
+      unhide: Array.isArray(d.unhide) ? d.unhide : [],
+      edits: d.edits && typeof d.edits === 'object' ? d.edits : {},
+      banner: typeof d.banner === 'string' ? d.banner : '',
     };
+  }
+  function mergeState(s) {
+    const settings = { ...DEFAULT_SETTINGS, ...(s.settings || {}) };
+    const decks = s.decks && typeof s.decks === 'object' ? s.decks : {};
+    // older saves kept one set of changes for everything: attach them to the deck that was in use
+    if (!s.decks && (s.custom || s.hide || s.unhide || s.edits)) decks[deckKey(settings.saiUrl)] = cleanDeckData(s);
+    state = { settings, decks, ...cleanDeckData(decks[deckKey(settings.saiUrl)]) };
+  }
+  function stashDeckData() {
+    state.decks[deckKey(state.settings.saiUrl)] = { custom: state.custom, hide: state.hide, unhide: state.unhide, edits: state.edits, banner: state.banner };
+  }
+  function switchDeck(newUrl) {
+    stashDeckData();
+    state.settings.saiUrl = newUrl;
+    Object.assign(state, cleanDeckData(state.decks[deckKey(newUrl)]));
   }
 
   let saveTimer = null;
@@ -116,6 +138,7 @@
   }
   function saveState() {
     pruneOld();
+    stashDeckData();
     lsSet(LS.state, state);
     setEditorStatus(RELAY ? 'Saving…' : 'Saved on this laptop (preview mode).');
     if (!RELAY) return;
@@ -161,7 +184,7 @@
         const res = await fetch('data/sample-deck.json', { cache: 'no-store' });
         raw = await res.json(); fetchedAt = new Date().toISOString();
       }
-      deck = { raw, fetchedAt, url };
+      deck = { raw, fetchedAt, url }; loadError = '';
       lsSet(LS.deck, deck);
       const m = normalize(raw);
       const songs = m.items.filter(i => i.isSong && !i.hiddenSR).length;
@@ -170,9 +193,12 @@
       return true;
     } catch (e) {
       const cached = lsGet(LS.deck, null);
-      if (cached && !deck) { deck = cached; toast('Couldn’t reach Sai Rhythms (' + e.message + '). Showing the last list this laptop loaded.', true, 10000); }
-      else toast('Couldn’t reload: ' + e.message, true, 10000);
-      return false;
+      const sameDeck = d => d && deckKey(d.url) === deckKey(url);
+      if (sameDeck(deck)) { toast('Couldn’t reload: ' + e.message + ' Still showing the list loaded earlier.', true, 12000); return false; }
+      if (sameDeck(cached)) { deck = cached; toast('Couldn’t reach Sai Rhythms (' + e.message + '). Showing the last copy of this list this laptop loaded.', true, 12000); return true; }
+      deck = null; loadError = e.message;
+      toast('Couldn’t load that deck: ' + e.message, true, 15000);
+      return true;
     }
   }
 
@@ -212,9 +238,7 @@
       if (e.title === 'slideshow_settings') meta = e; else entries.push(e);
     }
     const slots = (meta.timeslots || []).map(t => ({ name: t[0], type: t[1] }));
-    const slotIdx = n => { const i = slots.findIndex(s => s.name === n); return i < 0 ? 999 : i; };
-    const ordered = entries.map((e, i) => ({ e, i }))
-      .sort((a, b) => (slotIdx(a.e.slot) - slotIdx(b.e.slot)) || (a.i - b.i)).map(x => x.e);
+    const ordered = entries; // Sai Rhythms already lists entries in presentation order
     const occ = {};
     const items = ordered.map(e => {
       const slot = e.slot || '';
@@ -329,6 +353,12 @@
     return lines.some(l => l.length > 180) || avg > 95;
   }
 
+  const scrollMode = () => state.settings.longText !== 'split';
+  function lyricParts(text) {
+    if (scrollMode()) return [text.split('\n').map(l => l.trim()).filter(Boolean)];
+    return splitLines(text, effMaxLines());
+  }
+  function proseParts(text) { return scrollMode() ? [text] : splitProse(text, 650 / zoom); }
   function pageKinds(en) {
     const s = state.settings;
     if (en.custom) {
@@ -337,14 +367,14 @@
       if (c.type === 'image') return { role: 'info', pages: [{ kind: 'image' }] };
       const body = (c.body || '').trim();
       if (!body) return { role: 'card', pages: [{ kind: 'card' }] };
-      if (isProse(body)) return { role: 'info', pages: splitProse(body, 650 / zoom).map(t => ({ kind: 'prose', text: t })) };
-      return { role: 'lyrics', pages: splitLines(body, effMaxLines()).map(l => ({ kind: 'lyrics', lines: l })) };
+      if (isProse(body)) return { role: 'info', pages: proseParts(body).map(t => ({ kind: 'prose', text: t })) };
+      return { role: 'lyrics', pages: lyricParts(body).map(l => ({ kind: 'lyrics', lines: l })) };
     }
     const it = en.item;
     if (it.kind === 'title') return { role: 'title', pages: [{ kind: 'title' }] };
     if (it.html) return { role: 'info', pages: [{ kind: 'html' }] };
-    if (it.lyrics && isProse(it.lyrics)) return { role: 'info', pages: splitProse(it.lyrics, 650 / zoom).map(t => ({ kind: 'prose', text: t })) };
-    if (it.lyrics) return { role: 'lyrics', pages: splitLines(it.lyrics, effMaxLines()).map(l => ({ kind: 'lyrics', lines: l })) };
+    if (it.lyrics && isProse(it.lyrics)) return { role: 'info', pages: proseParts(it.lyrics).map(t => ({ kind: 'prose', text: t })) };
+    if (it.lyrics) return { role: 'lyrics', pages: lyricParts(it.lyrics).map(l => ({ kind: 'lyrics', lines: l })) };
     return { role: 'card', pages: [{ kind: 'card' }] };
   }
 
@@ -403,7 +433,7 @@
     $('#counter').textContent = pages.length ? `${cur + 1} / ${pages.length}` : '0 / 0';
     highlightEditorRow();
     if (!p) {
-      slideEl.innerHTML = `<div class="col center"><div class="panel"><h1 class="s-title">No slides yet</h1><div class="s-meaning">Check the Sai Rhythms link in Settings, then press Reload from list.</div></div></div>`;
+      slideEl.innerHTML = `<div class="col center"><div class="panel"><h1 class="s-title">No slides yet</h1><div class="s-meaning">${loadError ? 'The deck couldn’t be loaded: ' + esc(loadError) + '<br>' : ''}Check the Sai Rhythms link in Settings, then press Reload from list.</div></div></div>`;
       nextBox.hidden = true; stage.className = ''; return;
     }
     const bg = bgFor(p.role, p.bgIndex);
@@ -446,12 +476,12 @@
         return `<div class="col ${colClass === 'center' ? 'full' : colClass} has-image">${title ? `<h1 class="s-title">${esc(title)}</h1>` : ''}${src ? `<img class="s-image" src="${esc(src)}" alt="${esc(title)}">` : '<div class="s-meaning">Add a picture link to this slide in Edit slides.</div>'}</div>`;
       }
       case 'html':
-        return `<div class="col center"><div class="panel"><h1 class="s-title">${esc(title)}</h1><div class="s-rule"></div><div class="s-html">${it.html}</div></div></div>`;
+        return `<div class="col center"><div class="panel"><h1 class="s-title">${esc(title)}</h1><div class="s-rule"></div><div class="s-html scroller">${it.html}</div></div></div>`;
       case 'prose':
-        return `<div class="col center"><div class="panel"><h1 class="s-title">${esc(title)}</h1><div class="s-rule"></div><div class="s-prose">${p.text.split(/\n+/).map(t => `<p>${esc(t)}</p>`).join('')}</div>${pageNote}</div></div>`;
+        return `<div class="col center"><div class="panel"><h1 class="s-title">${esc(title)}</h1><div class="s-rule"></div><div class="s-prose scroller">${p.text.split(/\n+/).map(t => `<p>${esc(t)}</p>`).join('')}</div>${pageNote}</div></div>`;
       case 'lyrics': {
         const meaning = it && state.settings.showMeaning && it.meaning && p.pageNo === p.pageCount ? `<div class="s-meaning">${esc(it.meaning)}</div>` : '';
-        return `<div class="col ${colClass}"><div class="panel"><h1 class="s-title">${esc(title)}</h1>${leadHtml(it)}<div class="s-rule"></div><div class="s-lyrics">${p.lines.map(l => `<div>${esc(l)}</div>`).join('')}</div>${meaning}${pageNote}</div></div>`;
+        return `<div class="col ${colClass}"><div class="panel"><h1 class="s-title">${esc(title)}</h1>${leadHtml(it)}<div class="s-rule"></div><div class="s-lyrics scroller">${p.lines.map(l => `<div>${esc(l)}</div>`).join('')}</div>${meaning}${pageNote}</div></div>`;
       }
     }
     return '';
@@ -465,11 +495,20 @@
     stage.style.setProperty('--k', k);
     const over = () => box.scrollHeight > box.clientHeight + 2 || box.scrollHeight > col.clientHeight + 2 || col.scrollHeight > col.clientHeight + 2 || box.scrollWidth > box.clientWidth + 2;
     let guard = 0;
-    const shrink = () => { while (over() && k > 0.42 && guard++ < 60) { k -= 0.04; stage.style.setProperty('--k', k.toFixed(2)); } };
+    const sc = box.querySelector('.scroller');
+    const floor = sc && scrollMode() ? 0.72 * zoom : 0.42;   // below this size, scroll instead of shrinking
+    const shrink = () => { while (over() && k > floor && guard++ < 60) { k -= 0.04; stage.style.setProperty('--k', k.toFixed(2)); } };
     shrink();
     // Zoomed in but no room: the lyrics matter more than the meaning, so drop the meaning and try again.
     const meaning = col.querySelector('.s-meaning');
     if (zoom > 1 && meaning && k < zoom - 0.05) { meaning.remove(); k = zoom; guard = 0; stage.style.setProperty('--k', k); shrink(); }
+    if (sc && scrollMode() && over()) {
+      box.classList.add('scrolling');
+      sc.insertAdjacentHTML('afterend', '<div class="s-more" aria-hidden="true">▾ more</div>');
+      sc.addEventListener('scroll', updateScrollHints, { passive: true });
+      updateScrollHints();
+      return;
+    }
     // Prefer each lyric line on one line: shrink a little more if a line wraps.
     const lines = [...col.querySelectorAll('.s-lyrics > div')];
     if (!lines.length || zoom > 1) return; // when the text is zoomed in, bigger matters more than one-line lyrics
@@ -489,11 +528,30 @@
     nextBox.hidden = false;
   }
 
-  function go(i) {
+  function go(i, fromEnd = false) {
     if (!pages.length) return;
     cur = Math.max(0, Math.min(pages.length - 1, i));
     render();
+    const s = scroller();
+    if (s && fromEnd) { s.scrollTop = s.scrollHeight; updateScrollHints(); }
   }
+  /* long bhajans scroll within their slide: Next scrolls down first, then moves on */
+  function scroller() { return slideEl.querySelector('.panel.scrolling .scroller'); }
+  function updateScrollHints() {
+    const s = scroller(); if (!s) return;
+    const panel = s.closest('.panel');
+    panel.classList.toggle('more-below', s.scrollTop + s.clientHeight < s.scrollHeight - 4);
+    panel.classList.toggle('more-above', s.scrollTop > 4);
+  }
+  function stepScroll(dir, frac) {
+    const s = scroller(); if (!s) return false;
+    const behavior = stage.classList.contains('no-motion') ? 'auto' : 'smooth';
+    if (dir > 0 && s.scrollTop + s.clientHeight < s.scrollHeight - 4) { s.scrollBy({ top: s.clientHeight * frac, behavior }); return true; }
+    if (dir < 0 && s.scrollTop > 4) { s.scrollBy({ top: -s.clientHeight * frac, behavior }); return true; }
+    return false;
+  }
+  function advance(frac = 0.8) { if (!stepScroll(1, frac)) go(cur + 1); }
+  function retreat(frac = 0.8) { if (!stepScroll(-1, frac)) go(cur - 1, true); }
 
   /* ---------------- YouTube darshan video ---------------- */
   let videoPreview = null;   // live values while the Settings dialog is open
@@ -738,13 +796,31 @@
     toast(`Text size ${Math.round(zoom * 100)}%`, false, 1500);
   }
 
+  /* ---------------- banner text and clock ---------------- */
+  let clockTimer = null;
+  function renderOverlays() {
+    const b = $('#banner'), text = (state.banner || '').trim();
+    b.textContent = text; b.hidden = !text;
+    stage.classList.toggle('has-banner', !!text);
+    const c = $('#clock');
+    clearInterval(clockTimer);
+    if (state.settings.showClock) {
+      const tick = () => { c.textContent = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); };
+      tick(); clockTimer = setInterval(tick, 5000); c.hidden = false;
+    } else c.hidden = true;
+  }
+
   /* ---------------- logos ---------------- */
   const LOGO_H = { small: 80, medium: 110, large: 150 };
   function renderLogos() {
     const s = state.settings, wrap = $('#logos');
     wrap.innerHTML = '';
     stage.style.setProperty('--logo-h', (LOGO_H[s.logoSize] || 110) + 'px');
-    const updateTop = () => stage.classList.toggle('logo-top', !!wrap.querySelector('img.top-left:not([hidden]), img.top-right:not([hidden])'));
+    const updateTop = () => {
+      stage.classList.toggle('logo-top', !!wrap.querySelector('img.top-left:not([hidden]), img.top-right:not([hidden])'));
+      const bl = wrap.querySelector('img.bottom-left:not([hidden])');   // keep the clock clear of a bottom-left logo
+      stage.style.setProperty('--clock-left', bl && bl.complete && bl.naturalWidth ? (40 + bl.offsetWidth + 24) + 'px' : '40px');
+    };
     [[s.logo1, s.logo1Pos], [s.logo2, s.logo2Pos]].forEach(([src, pos]) => {
       if (!src || !pos || pos === 'off') return;
       const img = new Image();
@@ -762,8 +838,9 @@
     const f = $('#settings-form'), s = state.settings;
     f.template.innerHTML = templates.map(t => `<option value="${esc(t.id)}">${esc(t.name)}</option>`).join('');
     f.saiUrl.value = s.saiUrl; f.videos.value = s.videos; f.videoOn.value = s.videoOn; f.template.value = s.template;
-    f.maxLines.value = s.maxLines; f.showMeaning.checked = s.showMeaning; f.showSinger.checked = s.showSinger; f.titleSlide.checked = s.titleSlide;
+    f.maxLines.value = s.maxLines; f.longText.value = s.longText || 'scroll'; f.showMeaning.checked = s.showMeaning; f.showSinger.checked = s.showSinger; f.titleSlide.checked = s.titleSlide;
     for (const n of VIDEO_FIELDS) f[n].value = s[n];
+    f.banner.value = state.banner || ''; f.showClock.checked = !!s.showClock;
     showRangeValues();
     f.logo1.value = s.logo1 || ''; f.logo1Pos.value = s.logo1Pos || 'off'; f.logo2.value = s.logo2 || ''; f.logo2Pos.value = s.logo2Pos || 'off'; f.logoSize.value = s.logoSize || 'medium';
     $('#settings-dialog').showModal();
@@ -783,18 +860,23 @@
     videoPreview = null;
     if ($('#settings-dialog').returnValue !== 'save') { render(); return; }
     const f = $('#settings-form'), s = state.settings;
-    const urlChanged = f.saiUrl.value.trim() !== s.saiUrl;
+    const newUrl = f.saiUrl.value.trim();
+    const urlChanged = newUrl !== s.saiUrl;
     const tplChanged = f.template.value !== s.template;
+    const typedBanner = f.banner.value.trim(), bannerBefore = state.banner || '';
+    if (urlChanged) switchDeck(newUrl);           // the newly chosen deck brings its own top text…
+    if (!urlChanged || typedBanner !== bannerBefore) state.banner = typedBanner;   // …unless it was just changed here
     Object.assign(s, {
-      saiUrl: f.saiUrl.value.trim(), videos: f.videos.value.trim(), videoOn: f.videoOn.value, template: f.template.value,
-      maxLines: Math.max(4, Math.min(20, +f.maxLines.value || 10)),
+      showClock: f.showClock.checked,
+      videos: f.videos.value.trim(), videoOn: f.videoOn.value, template: f.template.value,
+      maxLines: Math.max(4, Math.min(20, +f.maxLines.value || 10)), longText: f.longText.value,
       showMeaning: f.showMeaning.checked, showSinger: f.showSinger.checked, titleSlide: f.titleSlide.checked,
       videoSide: f.videoSide.value, videoWidth: +f.videoWidth.value, videoZoom: +f.videoZoom.value,
       videoFocusX: +f.videoFocusX.value, videoFocusY: +f.videoFocusY.value, videoFeather: +f.videoFeather.value,
       logo1: f.logo1.value.trim(), logo1Pos: f.logo1Pos.value, logo2: f.logo2.value.trim(), logo2Pos: f.logo2Pos.value, logoSize: f.logoSize.value,
     });
     player.configure(s.videos);
-    renderLogos();
+    renderLogos(); renderOverlays();
     if (tplChanged) { lastBg = ''; await applyTemplate(s.template); }
     if (urlChanged) await loadDeck(true);
     afterEdit();
@@ -803,6 +885,7 @@
   $('#settings-form').addEventListener('click', e => {
     const a = e.target.closest('[data-act]'); if (!a) return;
     if (a.dataset.act === 'export') {
+      stashDeckData();
       const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
       const link = document.createElement('a'); link.href = URL.createObjectURL(blob);
       link.download = `bhajan-slides-backup-${new Date().toISOString().slice(0, 10)}.json`; link.click();
@@ -816,16 +899,25 @@
       const data = JSON.parse(await file.text());
       if (!data.settings) throw new Error('This file isn’t a slides backup.');
       mergeState(data); $('#settings-dialog').close('cancel');
-      player.configure(state.settings.videos); renderLogos(); lastBg = ''; await applyTemplate(state.settings.template); await loadDeck(true);
+      player.configure(state.settings.videos); renderLogos(); renderOverlays(); lastBg = ''; await applyTemplate(state.settings.template); await loadDeck(true);
       afterEdit(); toast('Backup restored.');
     } catch (err) { toast('Couldn’t restore: ' + err.message, true); }
     e.target.value = '';
   });
 
   /* ---------------- reload ---------------- */
+  async function applySharedChanges() {
+    const before = state.settings.template;
+    player.configure(state.settings.videos); renderLogos(); renderOverlays();
+    if (state.settings.template !== before || !template || template.id !== state.settings.template) { lastBg = ''; await applyTemplate(state.settings.template); }
+  }
   async function reload() {
     const keep = pages[cur] && pages[cur].en;
     toast('Reloading from Sai Rhythms…', false, 20000);
+    const urlBefore = state.settings.saiUrl;
+    await loadState();           // settings, edits and added slides saved from another tab or laptop
+    await applySharedChanges();
+    if (deckKey(urlBefore) !== deckKey(state.settings.saiUrl)) deck = null;
     const ok = await loadDeck(true);
     if (!ok) return;
     build();
@@ -848,7 +940,7 @@
   }
   $('#controls').addEventListener('click', e => {
     const b = e.target.closest('[data-act]'); if (!b) return;
-    ({ prev: () => go(cur - 1), next: () => go(cur + 1), reload, editor: () => toggleEditor(), settings: openSettings, fullscreen, smaller: () => setZoom(zoom - 0.1), larger: () => setZoom(zoom + 0.1) })[b.dataset.act]();
+    ({ prev: () => retreat(), next: () => advance(), reload, editor: () => toggleEditor(), settings: openSettings, fullscreen, smaller: () => setZoom(zoom - 0.1), larger: () => setZoom(zoom + 0.1) })[b.dataset.act]();
   });
   $('#editor').addEventListener('click', e => {
     const b = e.target.closest('[data-act]'); if (!b) return;
@@ -857,14 +949,17 @@
   });
   $('#viewport').addEventListener('click', e => {
     if (!$('#editor').hidden) return;
-    if (e.clientX < window.innerWidth * 0.25) go(cur - 1); else go(cur + 1);
+    if (e.target.closest('.scroller')) return;   // clicking inside lyrics shouldn't jump away
+    if (e.clientX < window.innerWidth * 0.25) retreat(); else advance();
   });
   document.addEventListener('keydown', e => {
     if (document.querySelector('dialog[open]')) return;
     if (e.target.matches('input, textarea, select')) return;
     const k = e.key;
-    if (['ArrowRight', 'ArrowDown', 'PageDown', ' ', 'Enter'].includes(k)) { e.preventDefault(); go(cur + 1); }
-    else if (['ArrowLeft', 'ArrowUp', 'PageUp', 'Backspace'].includes(k)) { e.preventDefault(); go(cur - 1); }
+    if (k === 'ArrowDown') { e.preventDefault(); advance(0.35); }
+    else if (k === 'ArrowUp') { e.preventDefault(); retreat(0.35); }
+    else if (['ArrowRight', 'PageDown', ' ', 'Enter'].includes(k)) { e.preventDefault(); advance(); }
+    else if (['ArrowLeft', 'PageUp', 'Backspace'].includes(k)) { e.preventDefault(); retreat(); }
     else if (k === 'Home') go(0);
     else if (k === 'End') go(pages.length - 1);
     else if (k === 'r' || k === 'R') reload();
@@ -877,6 +972,25 @@
     else if (k === '0') setZoom(1);
     else if (k === 'Escape') toggleEditor(false);
   });
+
+  window.addEventListener('storage', async e => {
+    if (e.key !== LS.state || !e.newValue) return;
+    try {
+      const urlBefore = state.settings.saiUrl;
+      mergeState(JSON.parse(e.newValue));
+      await applySharedChanges();
+      if (deckKey(urlBefore) !== deckKey(state.settings.saiUrl)) await loadDeck(true);
+      afterEditNoSave();
+    } catch { /* ignore */ }
+  });
+  function afterEditNoSave() {
+    const keep = pages[cur] && pages[cur].en;
+    build();
+    let idx = -1;
+    if (keep) idx = pages.findIndex(p => (keep.item && p.en.item && p.en.item.key === keep.item.key) || (keep.custom && p.en.custom && p.en.custom.id === keep.custom.id));
+    cur = idx >= 0 ? idx : Math.min(cur, Math.max(0, pages.length - 1));
+    render(); if (!$('#editor').hidden) renderEditor();
+  }
 
   let idleTimer = null;
   function wake() {
@@ -901,7 +1015,7 @@
     await applyTemplate(state.settings.template);
     await loadDeck(false);
     player.configure(state.settings.videos);
-    renderLogos();
+    renderLogos(); renderOverlays();
     build();
     if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch { } }
     render();

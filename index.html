@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link id="template-fonts" rel="stylesheet" href="">
-<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="app.css?v=2026.11.14-8">
 </head>
 <body>
 
@@ -20,6 +20,8 @@
     <div id="slide"></div>
     <div id="next-box" hidden></div>
     <div id="logos"></div>
+    <div id="banner" hidden></div>
+    <div id="clock" hidden></div>
     <div id="blackout" hidden></div>
   </div>
 </main>
@@ -124,7 +126,7 @@
 
 <dialog id="settings-dialog">
   <form method="dialog" id="settings-form">
-    <h2>Settings</h2>
+    <h2>Settings <small class="version">version 2026.11.14-8</small></h2>
     <label>Sai Rhythms published deck link
       <input name="saiUrl" type="url" required placeholder="https://sairhythms.sathyasai.org/song/slides/…/view">
     </label>
@@ -173,13 +175,24 @@
       <select name="template"></select>
     </label>
     <div class="row">
-      <label>Most lines on one slide
+      <label>When a bhajan doesn’t fit on one slide
+        <select name="longText">
+          <option value="scroll">Scroll within the slide</option>
+          <option value="split">Continue on the next slide</option>
+        </select>
+      </label>
+      <label class="narrow">Most lines per slide
         <input name="maxLines" type="number" min="4" max="20">
+        <small>Used when continuing on the next slide.</small>
       </label>
     </div>
     <label class="check"><input name="showMeaning" type="checkbox"> Show the meaning under each bhajan</label>
     <label class="check"><input name="showSinger" type="checkbox"> Show the singer and pitch under the bhajan title</label>
     <label class="check"><input name="titleSlide" type="checkbox"> Start with a title slide (center name and date)</label>
+    <label>Text at the top of every slide (for this deck only)
+      <input name="banner" type="text" maxlength="80" placeholder="e.g. Global Akhanda Bhajans 2026">
+    </label>
+    <label class="check"><input name="showClock" type="checkbox"> Show the current time in the bottom left</label>
     <fieldset>
       <legend>Logos on every slide</legend>
       <div class="row">
@@ -244,7 +257,7 @@
 
 <div id="toast" role="status" hidden></div>
 
-<script src="config.js"></script>
-<script src="app.js"></script>
+<script src="config.js?v=2026.11.14-8"></script>
+<script src="app.js?v=2026.11.14-8"></script>
 </body>
 </html>
