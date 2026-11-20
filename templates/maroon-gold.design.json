@@ -1,0 +1,56 @@
+{
+  "name": "Maroon and gold",
+  "fonts": "https://fonts.googleapis.com/css2?family=Marcellus&family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap",
+  "titleFont": "'Marcellus', Georgia, serif",
+  "bodyFont": "'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif",
+  "defaultTone": "dark",
+  "ink": "#FFF1D9",
+  "soft": "#F1C979",
+  "accent": "#F2B33D",
+  "panel": "rgba(52, 8, 16, 0.55)",
+  "titleInk": "#F7C55A",
+  "box": "rgba(52, 8, 16, 0.82)",
+  "strip": "rgba(44, 6, 12, 0.94)",
+  "stripInk": "#FFF1D9",
+  "rule": "rgba(255, 220, 160, 0.2)",
+  "logoBacking": true,
+  "backgrounds": {
+    "title": [
+      {
+        "src": "maroon-gold--title.jpg"
+      }
+    ],
+    "lyrics": [
+      {
+        "src": "maroon-gold--medallions.jpg"
+      },
+      {
+        "src": "maroon-gold--side-medallions.jpg"
+      },
+      {
+        "src": "maroon-gold--top-medallion.jpg"
+      },
+      {
+        "src": "maroon-gold--low-medallions.jpg"
+      }
+    ],
+    "info": [
+      {
+        "src": "maroon-gold--corners.jpg"
+      },
+      {
+        "src": "maroon-gold--small-medallions.jpg"
+      }
+    ],
+    "card": [
+      {
+        "src": "maroon-gold--title.jpg"
+      }
+    ],
+    "darshan": [
+      {
+        "src": "maroon-gold--corners.jpg"
+      }
+    ]
+  }
+}
