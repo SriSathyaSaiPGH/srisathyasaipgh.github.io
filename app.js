@@ -122,6 +122,15 @@
       pins,                                               // photos chosen by hand for particular slides
     };
   }
+  // One design for the whole deck, or designs for ranges of slides. A range is remembered by its
+  // first and last slide (not their numbers), so it follows the bhajans when the order changes.
+  function cleanDesignMap(m) {
+    m = m && typeof m === 'object' ? m : {};
+    const ranges = (Array.isArray(m.ranges) ? m.ranges : [])
+      .filter(r => r && typeof r.from === 'string' && typeof r.to === 'string' && typeof r.id === 'string' && /^[a-z0-9-]+$/.test(r.id))
+      .map(r => ({ from: r.from, to: r.to, id: r.id }));
+    return { mode: m.mode === 'ranges' ? 'ranges' : 'whole', ranges };
+  }
   function cleanDeckData(d) {
     d = d || {};
     return {
@@ -133,6 +142,7 @@
       ticker: cleanTicker(d.ticker),
       cover: typeof d.cover === 'string' ? d.cover : '',
       photo: cleanPhoto(d.photo),
+      designMap: cleanDesignMap(d.designMap),
     };
   }
   function mergeState(s) {
@@ -143,7 +153,7 @@
     state = { settings, decks, ...cleanDeckData(decks[deckKey(settings.saiUrl)]) };
   }
   function stashDeckData() {
-    state.decks[deckKey(state.settings.saiUrl)] = { custom: state.custom, hide: state.hide, unhide: state.unhide, edits: state.edits, banner: state.banner, ticker: state.ticker, cover: state.cover, photo: state.photo };
+    state.decks[deckKey(state.settings.saiUrl)] = { custom: state.custom, hide: state.hide, unhide: state.unhide, edits: state.edits, banner: state.banner, ticker: state.ticker, cover: state.cover, photo: state.photo, designMap: state.designMap };
   }
   function switchDeck(newUrl) {
     stashDeckData();
@@ -326,6 +336,8 @@
     // background rotation per role
     const roleCount = {};
     const visible = seq.filter(en => !en.hidden);
+    keyIndex = {};
+    visible.forEach((en, vi) => { keyIndex[entryKeyOf(en)] = vi; });
     pages = [];
     visible.forEach((en, vi) => {
       const kinds = pageKinds(en);
@@ -457,23 +469,59 @@
     }
     return null;
   }
-  async function applyTemplate(id) {
+  // Several designs can be in use at once (a different design per section or per slide),
+  // so each one is loaded once and kept.
+  const designCache = {};
+  const fontLinks = new Set();
+  async function ensureDesign(id) {
     const tid = templates.some(t => t.id === id) ? id : (templates[0] && templates[0].id) || 'akhanda';
-    try {
-      const t = await fetchDesign(tid);
-      if (!t) throw new Error('not found');
-      t.id = tid; template = t;
-    } catch {
-      template = { id: tid, base: '', backgrounds: {} };
-      toast('That design could not be loaded, so plain colours are used.', true);
+    if (designCache[tid]) return designCache[tid];
+    let t = await fetchDesign(tid);
+    if (t) t.id = tid;
+    else { t = { id: tid, base: '', backgrounds: {}, broken: true }; toast(`The design “${tid}” could not be loaded, so plain colours are used.`, true); }
+    if (t.fonts && !fontLinks.has(t.fonts)) {
+      fontLinks.add(t.fonts);
+      const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = t.fonts; document.head.appendChild(l);
     }
-    $('#template-fonts').href = template.fonts || '';
-    stage.style.setProperty('--title-font', template.titleFont || "Georgia, serif");
-    stage.style.setProperty('--body-font', template.bodyFont || "'Segoe UI', Arial, sans-serif");
-    currentTone = ''; setTone(template.defaultTone || 'light');
+    Object.values(t.backgrounds || {}).flat().forEach(b => { if (b.src) { const i = new Image(); i.src = (t.base || `templates/${tid}/`) + b.src; } });
+    return (designCache[tid] = t);
+  }
+  function useDesign(t) {
+    if (!t || t === template) return;
+    template = t;
+    stage.style.setProperty('--title-font', t.titleFont || "Georgia, serif");
+    stage.style.setProperty('--body-font', t.bodyFont || "'Segoe UI', Arial, sans-serif");
+    currentTone = ''; setTone(t.defaultTone || 'light');
     if ($('#logos')) renderLogos();   // the design may ask for a backing behind the logos
-    // preload images
-    Object.values(template.backgrounds || {}).flat().forEach(b => { if (b.src) { const i = new Image(); i.src = (template.base || `templates/${tid}/`) + b.src; } });
+  }
+  async function applyTemplate(id) {
+    useDesign(await ensureDesign(id));
+    await loadMappedDesigns();
+  }
+  // which design a slide uses: in range mode the last range that covers it, else the main design
+  let keyIndex = {};   // slide key → position among the visible slides (rebuilt with the slides)
+  function rangeSpan(r) {
+    const a = keyIndex[r.from], b = keyIndex[r.to];
+    if (a === undefined || b === undefined) return null;   // one end is no longer in the list
+    return [Math.min(a, b), Math.max(a, b)];
+  }
+  function designIdFor(p) {
+    const m = state.designMap || {};
+    if (!p || m.mode !== 'ranges') return state.settings.template;
+    let id = state.settings.template;
+    for (const r of m.ranges || []) { const s = rangeSpan(r); if (s && p.vi >= s[0] && p.vi <= s[1]) id = r.id; }
+    return id;
+  }
+  async function loadMappedDesigns() {
+    const m = state.designMap || {};
+    const ids = new Set((m.ranges || []).map(r => r.id));
+    await Promise.all([...ids].map(id => ensureDesign(id)));
+  }
+  async function setDesignRanges(m) {
+    const dm = cleanDesignMap({ ...state.designMap, ...('mode' in m ? { mode: m.mode } : {}), ...(Array.isArray(m.ranges) ? { ranges: m.ranges } : {}) });
+    state.designMap = dm;
+    await loadMappedDesigns();
+    afterEditNoSave(); saveState(true);
   }
   /* Colours: a design gives one palette, and optionally a second ("dark") palette for backgrounds
      marked "tone": "dark" (light text on dark glass). Designs whose backgrounds are all dark just
@@ -522,10 +570,37 @@
     return on === 'lyrics' || (on === 'songs' && p.en.item.isSong);
   }
 
+  /* ---------------- open bhajans (projected from the control page's Search tab) ---------------- */
+  let live = null;        // the bhajan being projected, or null when showing the deck
+  let liveQueue = [];     // bhajans lined up next
+  function songItem(s) {
+    return { key: 'live:' + (s.id || s.title), slot: 'Open bhajans', title: s.title || 'Bhajan', isSong: true,
+             singer: s.singer || '', pitch: s.pitch || '', lyrics: String(s.lyrics || ''), meaning: clean(s.meaning || ''), html: '' };
+  }
+  function livePage() {
+    const it = songItem(live), q = liveQueue.map(songItem);
+    const lines = it.lyrics.split('\n').map(l => l.trim()).filter(Boolean);
+    return { en: { item: it }, kind: 'lyrics', lines, role: 'lyrics', bgIndex: live.n || 0, vi: -1, pageNo: 1, pageCount: 1,
+             next: q[0] || null, next2: q[1] || null, live: true };
+  }
+  function curPage() { return live ? livePage() : pages[cur]; }
+  function projectSong(s) {
+    if (!s || !s.lyrics) return;
+    live = { ...s, n: (live ? (live.n || 0) + 1 : 0) };
+    liveQueue = liveQueue.filter(q => q.id !== s.id || q.title !== s.title);
+    render();
+  }
+  function endLive() { live = null; render(); }
+
   function render() {
     queueMicrotask(broadcastStatus);
-    const p = pages[cur];
-    $('#counter').textContent = pages.length ? `${cur + 1} / ${pages.length}` : '0 / 0';
+    const p = curPage();
+    if (p) {
+      const want = designIdFor(p);
+      if (!designCache[want]) ensureDesign(want).then(() => render());   // not loaded yet: show it as soon as it is
+      useDesign(designCache[want] || designCache[state.settings.template] || template);
+    }
+    $('#counter').textContent = live ? 'Open bhajan' : pages.length ? `${cur + 1} / ${pages.length}` : '0 / 0';
     highlightEditorRow();
     if (!p) {
       slideEl.innerHTML = `<div class="col center"><div class="panel"><h1 class="s-title">No slides yet</h1><div class="s-meaning">${loadError ? 'The deck couldn’t be loaded: ' + esc(loadError) + '<br>' : ''}Check the Sai Rhythms link in Settings, then press Reload from list.</div></div></div>`;
@@ -634,6 +709,7 @@
   }
 
   function go(i, fromEnd = false) {
+    live = null;   // moving in the deck ends a projected bhajan
     if (!pages.length) return;
     cur = Math.max(0, Math.min(pages.length - 1, i));
     render();
@@ -655,8 +731,16 @@
     if (dir < 0 && s.scrollTop > 4) { s.scrollBy({ top: -s.clientHeight * frac, behavior }); return true; }
     return false;
   }
-  function advance(frac = 0.8) { if (!stepScroll(1, frac)) go(cur + 1); }
-  function retreat(frac = 0.8) { if (!stepScroll(-1, frac)) go(cur - 1, true); }
+  function advance(frac = 0.8) {
+    if (stepScroll(1, frac)) return;
+    if (live) { if (liveQueue.length) projectSong(liveQueue[0]); return; }
+    go(cur + 1);
+  }
+  function retreat(frac = 0.8) {
+    if (stepScroll(-1, frac)) return;
+    if (live) { endLive(); return; }   // Back at the top of a projected bhajan returns to the deck slide you were on
+    go(cur - 1, true);
+  }
 
   /* ---------------- YouTube darshan video ---------------- */
   let videoPreview = null;   // live values while the Settings dialog is open
@@ -1020,6 +1104,7 @@
     if (!photoList) { loadPhotos().then(() => render()); return ''; }
     if (!photoList.length) return '';
     const order = shuffled(photoList, ph.seed || 1);
+    if (p.live) { let h = 0; for (const ch of String(p.en.item.key)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return order[h % order.length]; }
     return order[(p.vi || 0) % order.length];   // consecutive slides get different photos
   }
   function photoVisible(p) { return !!photoFor(p); }
@@ -1091,7 +1176,7 @@
     const add = (key, sel) => { const el = $(sel); if (el && !el.hidden) out.push([key, el]); };
     add('banner', '#banner'); add('next', '#next-box'); add('clock', '#clock');
     if ($('#photo').classList.contains('on')) out.push(['photo', $('#photo')]);
-    const tk = textKey(pages[cur]); const col = slideEl.querySelector('.col');
+    const tk = textKey(curPage()); const col = slideEl.querySelector('.col');
     if (tk && col) out.push([tk, col]);
     return out;
   }
@@ -1289,7 +1374,8 @@
   async function applySharedChanges() {
     const before = state.settings.template;
     player.configure(state.settings.videos); renderLogos(); renderOverlays();
-    if (state.settings.template !== before || !template || template.id !== state.settings.template) { lastBg = ''; await applyTemplate(state.settings.template); }
+    if (state.settings.template !== before || !designCache[state.settings.template]) { lastBg = ''; await applyTemplate(state.settings.template); }
+    await loadMappedDesigns();
   }
   async function reload() {
     const keep = pages[cur] && pages[cur].en;
@@ -1354,7 +1440,7 @@
     else if (k === '0') setZoom(1);
     else if (k === 'c' || k === 'C') openControls();
     else if (k === 'p' || k === 'P') setPhoto({ on: !(state.photo && state.photo.on) });
-    else if (k === 'Escape') toggleEditor(false);
+    else if (k === 'Escape') { if (live) endLive(); else toggleEditor(false); }
   });
 
   window.addEventListener('storage', async e => {
@@ -1385,13 +1471,13 @@
     pages.forEach((p, i) => {
       if (p.en === last) return; last = p.en;
       const it = p.en.item, c = p.en.custom;
-      out.push({ i, title: it ? it.title : (c.title || (c.type === 'darshan' ? 'Darshan video' : 'Added slide')), section: it ? it.slot : (c.slot || ''), song: !!(it && it.isSong), singer: it && it.isSong ? it.singer : '', pitch: it && it.isSong ? it.pitch : '', added: !!c });
+      out.push({ i, key: entryKeyOf(p.en), title: it ? it.title : (c.title || (c.type === 'darshan' ? 'Darshan video' : 'Added slide')), section: it ? it.slot : (c.slot || ''), song: !!(it && it.isSong), singer: it && it.isSong ? it.singer : '', pitch: it && it.isSong ? it.pitch : '', added: !!c });
     });
     return out;
   }
   function broadcastStatus() {
     if (!chan) return;
-    const p = pages[cur];
+    const p = curPage();
     const title = p ? (p.en.item ? p.en.item.title : (p.en.custom.title || 'Added slide')) : '';
     chan.postMessage({
       type: 'status', id: myId, fullscreen: !!document.fullscreenElement, visible: document.visibilityState === 'visible', at: Date.now(),
@@ -1401,6 +1487,10 @@
       deck: model ? { name: model.name, date: model.date } : null, saiUrl: state.settings.saiUrl,
       banner: state.banner || '', ticker: cleanTicker(state.ticker), titleSlide: titleSlideInfo(), list: slideListForControl(),
       settings: { ...state.settings, layouts: undefined }, templates: templates.map(t => ({ id: t.id, name: t.name })), arranging,
+      designMap: cleanDesignMap(state.designMap),
+      rangeState: (cleanDesignMap(state.designMap).ranges).map(r => !!rangeSpan(r)),
+      currentDesign: pages[cur] ? designIdFor(pages[cur]) : state.settings.template,
+      live: live ? { id: live.id, title: live.title } : null, liveQueue: liveQueue.map(q => ({ id: q.id, title: q.title, singer: q.singer || '', pitch: q.pitch || '' })),
       photo: { ...cleanPhoto(state.photo), pins: undefined, current: photoFor(pages[cur]) || '',
                pinned: !!(pages[cur] && ((state.photo && state.photo.pins) || {})[entryKeyOf(pages[cur].en)]) },
       arrangeKeys: arranging ? movables().map(([k]) => ({ key: k, label: ARRANGE_LABEL[k] })) : [], selKey,
@@ -1443,6 +1533,10 @@
         applyLayout(); saveArrange(); break;
       case 'arrangeSlide': if (arranging) { go(cur + (m.dir > 0 ? 1 : -1)); applyLayout(); } break;
       case 'photo': await setPhoto(m); break;
+      case 'designRanges': await setDesignRanges(m); break;
+      case 'liveSong': projectSong(m.song); break;
+      case 'liveEnd': endLive(); break;
+      case 'liveQueue': liveQueue = Array.isArray(m.queue) ? m.queue.slice(0, 20) : []; render(); break;
       case 'titleSlide': setTitleSlide(m.titleSlide || {}); afterEditNoSave(); saveState(true); break;
       case 'pin': lsSet(LS.pin, String(m.pin || '')); lastSaveNote = 'Sharing…'; saveState(true); break;
     }

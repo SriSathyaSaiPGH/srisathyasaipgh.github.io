@@ -96,12 +96,31 @@
   li.item .t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   li.item .s { color: var(--muted); font-size: 13.5px; white-space: nowrap; }
 
+  .tabs button { font-size: 15px; }
+  input[type=search] { width: 100%; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; background: var(--bg); font-size: 17px; }
+  .results { list-style: none; margin: 10px 0 0; padding: 0; }
+  .results > li { border-top: 1px solid var(--line); padding: 10px 4px; }
+  .results > li:first-child { border-top: 0; }
+  .r-head { cursor: pointer; }
+  .r-head b { font-weight: 600; }
+  .r-head .sub { color: var(--muted); font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .r-body { margin-top: 10px; }
+  .r-lyrics { white-space: pre-line; font-size: 15px; line-height: 1.45; max-height: 220px; overflow-y: auto; background: var(--bg); border-radius: 10px; padding: 10px 12px; }
+  .r-body .row { margin-top: 10px; }
+  .q-row { display: flex; align-items: center; gap: 8px; }
+  .q-row .t { flex: 1; min-width: 0; }
+  .q-row .t div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .q-row button { min-height: 38px; padding: 4px 10px; }
   .ph-now { display: flex; gap: 12px; align-items: center; }
   .ph-now img { width: 64px; height: 64px; object-fit: cover; border-radius: 10px; border: 1px solid var(--line); }
   .ph-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; margin-top: 12px; max-height: 60vh; overflow-y: auto; padding: 2px; }
   .ph-grid button { padding: 0; min-height: 0; aspect-ratio: 1; overflow: hidden; border-radius: 10px; border: 2px solid transparent; background: var(--bg); }
   .ph-grid button img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .ph-grid button.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+  .range-row { border: 1px solid var(--line); border-radius: 12px; padding: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .range-row .design { grid-column: 1 / span 2; display: flex; gap: 8px; align-items: flex-end; }
+  .range-row .design label { flex: 1; }
+  .range-row .warn { grid-column: 1 / span 2; color: var(--warn); font-size: 13.5px; }
   .chips { display: flex; flex-wrap: wrap; gap: 8px; }
   .chips button { min-height: 40px; padding: 6px 12px; font-size: 14.5px; }
   .pad { display: grid; grid-template-columns: repeat(3, 64px); grid-template-rows: repeat(3, 56px); gap: 6px; justify-content: center; margin: 6px 0; }
@@ -125,6 +144,7 @@
     </div>
     <div class="tabs" role="tablist">
       <button role="tab" data-tab="live" aria-selected="true">Live</button>
+      <button role="tab" data-tab="search">Search</button>
       <button role="tab" data-tab="words">On screen</button>
       <button role="tab" data-tab="settings">Settings</button>
       <button role="tab" data-tab="arrange">Arrange</button>
@@ -175,6 +195,7 @@
         <button data-cmd="reload">Reload from list</button>
       </div>
       <p class="note" id="scroll-note" hidden>This bhajan scrolls: Next moves down through the words first.</p>
+      <p class="note" id="design-now"></p>
     </section>
 
     <section class="card">
@@ -216,6 +237,29 @@
     <section class="card needs-slides">
       <h2>Jump to a slide</h2>
       <ol id="list"></ol>
+    </section>
+  </div>
+
+  <!-- SEARCH (open bhajans) -->
+  <div class="panel" data-panel="search" hidden>
+    <section class="card needs-slides" id="live-card" hidden>
+      <div class="now-label">Projecting an open bhajan</div>
+      <div class="now-title" id="live-title"></div>
+      <div class="actions left"><button id="live-end" class="primary">Back to the deck</button></div>
+    </section>
+
+    <section class="card">
+      <h2>Find a bhajan</h2>
+      <input type="search" id="q" placeholder="Type part of the title or words…" autocomplete="off" enterkeyhint="search">
+      <p class="note" id="lib-note">Loading the song library…</p>
+      <ol id="results" class="results"></ol>
+    </section>
+
+    <section class="card needs-slides">
+      <h2>Up next</h2>
+      <ol id="queue" class="results"></ol>
+      <p class="note" id="queue-note">Bhajans you add show here and in the Next box on the slides. Next on the slides moves to the first one.</p>
+      <div class="actions left"><button id="queue-next" class="primary">Project the first one now</button></div>
     </section>
   </div>
 
@@ -326,7 +370,8 @@
         <details>
           <summary>Design</summary>
           <div class="stack">
-            <label>Design <select name="template"></select></label>
+            <label>Main design <select name="template"></select></label>
+            <p class="note" style="margin:0">To use other designs for parts of the deck, see “Designs across the deck” below.</p>
           </div>
         </details>
         <details>
@@ -371,6 +416,23 @@
         </details>
       </form>
     </section>
+    <section class="card needs-slides" id="ranges-card">
+      <h2>Designs across the deck</h2>
+      <div class="seg" id="design-mode">
+        <button data-mode="whole">Same design for the whole deck</button>
+        <button data-mode="ranges">Different designs for ranges of slides</button>
+      </div>
+      <div id="ranges-box" hidden>
+        <p class="note">Pick the first and last slide of each range and its design. Slides outside every range use the main design. If ranges overlap, the lower one in the list wins. Ranges follow the slides themselves, so they stay right when the order changes on Sai Rhythms.</p>
+        <div id="ranges" class="stack" style="margin-top:10px"></div>
+        <div class="actions" style="justify-content:space-between">
+          <button id="range-add">Add a range</button>
+          <span><button id="ranges-undo">Undo</button> <button id="ranges-apply" class="primary">Apply ranges</button></span>
+        </div>
+        <p class="note" id="ranges-note"></p>
+      </div>
+    </section>
+
     <div class="savebar">
       <p class="note" id="sf-note">No unsaved changes.</p>
       <button id="sf-undo">Undo</button>
@@ -429,7 +491,7 @@
   </div>
 </div>
 
-<script src="config.js?v=2026.11.20-19"></script>
+<script src="config.js?v=2026.11.20-23"></script>
 <script>
 (() => {
   'use strict';
@@ -493,7 +555,9 @@
     showTicker(status.ticker, status.banner);
     showTitleSlide(status.titleSlide);
     showPhoto(status.photo);
+    renderLive();
     fillSettings(status.settings, status.templates);
+    renderDesigns();
     if (!deckDirty) $('#deck-url').value = status.saiUrl || '';
     $('#deck-name').textContent = status.deck ? [status.deck.name, status.deck.date].filter(Boolean).join(', ') : '';
     renderList(); renderArrange();
@@ -613,13 +677,14 @@
   function markDirty() { sfDirty = true; $('#sf-note').textContent = 'Unsaved changes.'; }
   let pvTimer = null;
   sf.addEventListener('input', e => {
+    if (e.target.closest('#section-designs')) return;   // section designs apply straight away
     markDirty(); showRanges();
     if (VIDEO_KEYS.includes(e.target.name) && status) {
       clearTimeout(pvTimer);
       pvTimer = setTimeout(() => { previewing = true; const v = formSettings(); send('videoPreview', { settings: Object.fromEntries(VIDEO_KEYS.map(k => [k, v[k]])) }); }, 60);
     }
   });
-  sf.addEventListener('change', markDirty);
+  sf.addEventListener('change', e => { if (!e.target.closest('#section-designs')) markDirty(); });
   $('#sf-save').addEventListener('click', async () => {
     const v = formSettings(); sfDirty = false; previewing = false;
     if (status) { send('settings', { settings: v }); $('#sf-note').textContent = 'Saved.'; }
@@ -669,6 +734,171 @@
     if (a === 'reset-all' && confirm('Put every text and logo on this design back where the design places them?')) send('arrangeReset', { all: true });
   }));
   document.querySelectorAll('[data-arr-slide]').forEach(b => b.addEventListener('click', () => send('arrangeSlide', { dir: +b.dataset.arrSlide })));
+
+  /* ---------- designs across the deck ---------- */
+  let rangesDraft = null, rangesDirty = false, rangeSig = '';
+  function slideOptions(sel) {
+    return (status.list || []).map(s => `<option value="${esc(s.key)}"${s.key === sel ? ' selected' : ''}>${s.i + 1} · ${esc(s.title)}</option>`).join('');
+  }
+  function designOptions(sel) {
+    return (status.templates || []).map(t => `<option value="${esc(t.id)}"${t.id === sel ? ' selected' : ''}>${esc(t.name)}</option>`).join('');
+  }
+  function renderDesigns() {
+    if (!status) return;
+    const dm = status.designMap || { mode: 'whole', ranges: [] };
+    const tpls = status.templates || [];
+    const name = id => (tpls.find(t => t.id === id) || {}).name || id;
+    $('#design-now').textContent = status.currentDesign ? 'Design on screen: ' + name(status.currentDesign) : '';
+    document.querySelectorAll('#design-mode [data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === dm.mode));
+    $('#ranges-box').hidden = dm.mode !== 'ranges';
+    if (!rangesDirty) rangesDraft = dm.ranges.map(r => ({ ...r }));
+    const sig = JSON.stringify([rangesDraft, status.list.map(s => s.key + s.i), tpls, status.rangeState, rangesDirty]);
+    if (sig === rangeSig) return; rangeSig = sig;
+    const box = $('#ranges');
+    box.innerHTML = rangesDraft.length ? rangesDraft.map((r, n) => `
+      <div class="range-row" data-n="${n}">
+        <label>From <select data-f="from">${slideOptions(r.from)}</select></label>
+        <label>To <select data-f="to">${slideOptions(r.to)}</select></label>
+        <div class="design"><label>Design <select data-f="id">${designOptions(r.id)}</select></label><button data-del aria-label="Remove this range">Remove</button></div>
+        ${!rangesDirty && status.rangeState && status.rangeState[n] === false ? '<div class="warn">A slide at one end of this range is no longer in the list. Pick its ends again.</div>' : ''}
+      </div>`).join('') : '<p class="note">No ranges yet. Add one to start.</p>';
+    box.querySelectorAll('.range-row').forEach(row => {
+      const n = +row.dataset.n;
+      row.querySelectorAll('select').forEach(s => s.addEventListener('change', () => { rangesDraft[n][s.dataset.f] = s.value; rangesDirty = true; $('#ranges-note').textContent = 'Not applied yet.'; }));
+      row.querySelector('[data-del]').addEventListener('click', () => { rangesDraft.splice(n, 1); rangesDirty = true; rangeSig = ''; renderDesigns(); $('#ranges-note').textContent = 'Not applied yet.'; });
+    });
+  }
+  document.querySelectorAll('#design-mode [data-mode]').forEach(b => b.addEventListener('click', () => {
+    send('designRanges', { mode: b.dataset.mode });
+    if (b.dataset.mode === 'ranges' && status && !(status.designMap || {}).ranges.length && !rangesDraft.length) $('#range-add').click();
+  }));
+  $('#range-add').addEventListener('click', () => {
+    const list = status ? status.list : [];
+    const here = list.filter(s => s.i <= status.cur).pop() || list[0];
+    if (!here) return;
+    const otherDesign = (status.templates || []).find(t => t.id !== (status.settings || {}).template) || (status.templates || [])[0];
+    rangesDraft.push({ from: here.key, to: here.key, id: otherDesign ? otherDesign.id : '' });
+    rangesDirty = true; rangeSig = ''; renderDesigns();
+    $('#ranges-note').textContent = 'New range starts and ends at the slide showing now. Change its ends and design, then Apply.';
+  });
+  $('#ranges-apply').addEventListener('click', () => {
+    send('designRanges', { mode: 'ranges', ranges: rangesDraft.filter(r => r.from && r.to && r.id) });
+    rangesDirty = false; rangeSig = ''; $('#ranges-note').textContent = 'Applied.';
+  });
+  $('#ranges-undo').addEventListener('click', () => { rangesDirty = false; rangeSig = ''; $('#ranges-note').textContent = ''; renderDesigns(); });
+
+  /* ---------- Search: open bhajans from the Sai Rhythms library ---------- */
+  let library = null, libIndex = [], openId = null;
+  const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+  function idb() {
+    return new Promise((res, rej) => { const r = indexedDB.open('bhajan-slides', 1); r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+  }
+  async function idbGet(k) { try { const db = await idb(); return await new Promise(res => { const q = db.transaction('kv').objectStore('kv').get(k); q.onsuccess = () => res(q.result); q.onerror = () => res(null); }); } catch { return null; } }
+  async function idbSet(k, v) { try { const db = await idb(); db.transaction('kv', 'readwrite').objectStore('kv').put(v, k); } catch { } }
+  function useLibrary(lib) {
+    // Sai Rhythms keeps a bhajan's first line in "title2" and the rest in "lyrics": put them together.
+    lib.songs.forEach(s => {
+      if (s.joined) return;
+      const first = String(s.title2 || '').trim();
+      if (first && !norm(s.lyrics).startsWith(norm(first))) s.lyrics = first + '\n' + s.lyrics;
+      s.joined = true;
+    });
+    library = lib;
+    libIndex = lib.songs.map(s => ({ s, t: norm(s.title + ' ' + s.title2), w: norm(s.lyrics) }));
+    const when = lib.fetchedAt ? new Date(lib.fetchedAt).toLocaleDateString() : '';
+    $('#lib-note').innerHTML = `${lib.songs.length.toLocaleString()} bhajans from Sai Rhythms${when ? ', loaded ' + esc(when) : ''}. <a href="#" id="lib-refresh">Refresh</a>`;
+    $('#lib-refresh').addEventListener('click', e => { e.preventDefault(); loadLibrary(true); });
+    search();
+  }
+  async function loadLibrary(refresh = false) {
+    if (!RELAY) { $('#lib-note').textContent = 'Searching the library needs the Google Apps Script relay (see SETUP.md).'; return; }
+    if (!refresh) {
+      const cached = await idbGet('library');
+      if (cached && cached.songs) { useLibrary(cached); if (Date.now() - Date.parse(cached.fetchedAt || 0) < 7 * 864e5) return; }
+    }
+    $('#lib-note').textContent = library ? 'Refreshing the song library…' : 'Loading the song library (first time takes a few seconds)…';
+    try {
+      const res = await fetch(RELAY + (RELAY.includes('?') ? '&' : '?') + 'action=library' + (refresh ? '&refresh=1' : ''));
+      const d = await res.json();
+      if (!d.ok) throw new Error(/Unknown|action/i.test(d.error || '') ? 'the Google Apps Script needs the latest update (see SETUP.md)' : (d.error || 'unknown error'));
+      if (!d.songs) throw new Error('the Google Apps Script needs the latest update (see SETUP.md)');
+      const lib = { songs: d.songs, version: d.version, fetchedAt: d.fetchedAt || new Date().toISOString() };
+      idbSet('library', lib); useLibrary(lib);
+    } catch (e) { if (!library) $('#lib-note').textContent = 'Couldn’t load the song library: ' + e.message; }
+  }
+  function search() {
+    const ol = $('#results'), q = norm($('#q').value);
+    if (!library) { ol.innerHTML = ''; return; }
+    if (q.length < 2) { ol.innerHTML = ''; return; }
+    const words = q.split(' ');
+    const hits = [];
+    for (const x of libIndex) {
+      const inT = words.every(w => x.t.includes(w)), inW = !inT && words.every(w => x.t.includes(w) || x.w.includes(w));
+      if (!inT && !inW) continue;
+      hits.push({ x, score: (x.t.startsWith(q) ? 0 : inT ? 1 : 2) });
+      if (hits.length > 400) break;
+    }
+    hits.sort((a, b) => a.score - b.score || a.x.s.title.localeCompare(b.x.s.title));
+    const top = hits.slice(0, 40);
+    ol.innerHTML = top.length ? top.map(({ x }) => resultHtml(x.s)).join('') : '<li class="note">No bhajans match. Try fewer or different words.</li>';
+    wireResults(ol);
+  }
+  function resultHtml(s) {
+    const first = (s.lyrics.split('\n').find(l => l.trim()) || '').trim();
+    const open = openId === s.id;
+    return `<li data-id="${esc(s.id)}"><div class="r-head"><b>${esc(s.title)}</b><div class="sub">${esc([s.deity, first].filter(Boolean).join(' · '))}</div></div>${open ? `
+      <div class="r-body">
+        <div class="r-lyrics">${esc(s.lyrics)}</div>
+        <div class="row"><input type="text" class="r-singer" placeholder="Singer (optional)"><input type="text" class="r-pitch" placeholder="Pitch (optional)"></div>
+        <div class="actions left"><button class="primary" data-act="project">Project now</button><button data-act="queue">Add to Up next</button></div>
+      </div>` : ''}</li>`;
+  }
+  const songById = id => library && library.songs.find(s => s.id === id);
+  function songFrom(li) {
+    const s = songById(li.dataset.id); if (!s) return null;
+    const singer = (li.querySelector('.r-singer') || {}).value || '', pitch = (li.querySelector('.r-pitch') || {}).value || '';
+    return { id: s.id, title: s.title, lyrics: s.lyrics, meaning: s.meaning, singer: singer.trim(), pitch: pitch.trim() };
+  }
+  function wireResults(ol) {
+    ol.querySelectorAll('li[data-id] .r-head').forEach(hd => hd.addEventListener('click', () => {
+      const id = hd.parentElement.dataset.id; openId = openId === id ? null : id; search();
+    }));
+    ol.querySelectorAll('li[data-id] [data-act]').forEach(b => b.addEventListener('click', () => {
+      const li = b.closest('li'), song = songFrom(li); if (!song) return;
+      if (!status) { $('#lib-note').textContent = 'Projecting needs this page open in the same browser as the slides.'; return; }
+      if (b.dataset.act === 'project') send('liveSong', { song });
+      else { sendQueue([...queueSongs(), song]); b.textContent = 'Added'; b.disabled = true; }
+    }));
+  }
+  let qTimer = null;
+  $('#q').addEventListener('input', () => { clearTimeout(qTimer); openId = null; qTimer = setTimeout(search, 120); });
+
+  /* the queue lives in the slides window; this page shows it and sends changes */
+  function queueSongs() {
+    return ((status && status.liveQueue) || []).map(q => { const s = songById(q.id); return s ? { id: s.id, title: s.title, lyrics: s.lyrics, meaning: s.meaning, singer: q.singer, pitch: q.pitch } : null; }).filter(Boolean);
+  }
+  function sendQueue(list) { send('liveQueue', { queue: list }); }
+  let liveSig = '';
+  function renderLive() {
+    if (!status) return;
+    $('#live-card').hidden = !status.live;
+    if (status.live) $('#live-title').textContent = status.live.title;
+    const q = status.liveQueue || [];
+    const sig = JSON.stringify(q);
+    if (sig === liveSig) return; liveSig = sig;
+    $('#queue').innerHTML = q.length ? q.map((s, n) => `<li class="q-row" data-n="${n}"><div class="t"><div><b>${esc(s.title)}</b></div><div class="note" style="margin:0">${esc([s.singer, s.pitch ? 'pitch ' + s.pitch : ''].filter(Boolean).join(', '))}</div></div>
+      <button data-q="up" aria-label="Move up"${n ? '' : ' disabled'}>↑</button><button data-q="del" aria-label="Remove">✕</button></li>`).join('') : '';
+    $('#queue-next').disabled = !q.length;
+    $('#queue').querySelectorAll('[data-q]').forEach(b => b.addEventListener('click', () => {
+      const n = +b.closest('li').dataset.n, list = queueSongs();
+      if (b.dataset.q === 'del') list.splice(n, 1);
+      if (b.dataset.q === 'up' && n > 0) [list[n - 1], list[n]] = [list[n], list[n - 1]];
+      sendQueue(list);
+    }));
+  }
+  $('#queue-next').addEventListener('click', () => { const l = queueSongs(); if (l[0]) send('liveSong', { song: l[0] }); });
+  $('#live-end').addEventListener('click', () => send('liveEnd'));
+  loadLibrary();
 
   /* ---------- Swami's photo ---------- */
   let photos = null, curPhoto = { on: false, file: '' };
