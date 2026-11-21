@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session controls</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎛️</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600&display=swap">
+<style>
+  :root {
+    --bg: #F2F5F9; --card: #FFFFFF; --ink: #1C2B40; --muted: #5D6B7E; --line: #D9E0EA;
+    --accent: #1F5FA6; --accent-ink: #FFFFFF; --gold: #A87F2F; --ok: #1E7A46; --warn: #A15C00; --soft: #E7F0FB;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0F1722; --card: #182333; --ink: #E6ECF4; --muted: #9AA9BC; --line: #2B3A4F;
+      --accent: #5B9BE6; --accent-ink: #0F1722; --gold: #D8B26A; --ok: #5CC98C; --warn: #E8A64A; --soft: #20324A; color-scheme: dark; }
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: 'Jost', 'Segoe UI', Arial, sans-serif; font-size: 16px; line-height: 1.4; }
+
+  /* header + tabs */
+  .top { position: sticky; top: 0; z-index: 10; background: var(--bg); border-bottom: 1px solid var(--line); }
+  .top-inner { max-width: 640px; margin: 0 auto; padding: 12px 14px 0; }
+  .title-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  h1 { font-size: 20px; font-weight: 600; margin: 0; }
+  .pill { font-size: 13px; padding: 3px 11px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+  .pill.ok { color: var(--ok); border-color: currentColor; }
+  .pill.warn { color: var(--warn); border-color: currentColor; }
+  .tabs { display: flex; gap: 2px; margin-top: 10px; }
+  .tabs button {
+    flex: 1; border: 0; border-radius: 10px 10px 0 0; background: transparent; min-height: 44px; padding: 8px 4px;
+    color: var(--muted); font-weight: 500; border-bottom: 3px solid transparent;
+  }
+  .tabs button[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); background: var(--card); }
+
+  main { max-width: 640px; margin: 0 auto; padding: 14px 14px 110px; }
+  .panel { display: flex; flex-direction: column; gap: 14px; }
+  h2 { font-size: 17px; font-weight: 600; margin: 0 0 10px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px; }
+  .note { font-size: 14px; color: var(--muted); margin: 8px 0 0; }
+  .now-label { font-size: 13px; color: var(--muted); }
+  .now-title { font-size: 20px; font-weight: 600; margin: 2px 0 0; }
+  .next { margin-top: 10px; padding-left: 12px; border-left: 4px solid var(--gold); }
+  .next .now-title { font-size: 17px; }
+  .next.after { border-left-color: var(--line); margin-top: 8px; }
+  .next.after .now-title { font-size: 15px; font-weight: 500; }
+  .meta { color: var(--muted); font-size: 14px; }
+  .count { float: right; color: var(--muted); font-variant-numeric: tabular-nums; font-size: 14px; }
+
+  button, select, input, textarea { font: inherit; color: var(--ink); }
+  button { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; cursor: pointer; min-height: 44px; }
+  button:hover { background: var(--soft); }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; font-weight: 600; }
+  button.on { background: var(--soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  button:disabled { opacity: .45; cursor: default; }
+  button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 3px solid #7FB0EA; outline-offset: 2px; }
+  .nav { display: grid; grid-template-columns: 1fr 2fr; gap: 10px; margin-top: 14px; }
+  .nav button { font-size: 20px; min-height: 64px; }
+  .tools { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .tools button { flex: 1 1 auto; font-size: 15px; }
+  .seg { display: flex; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .seg button { flex: 1; border: 0; border-radius: 0; border-right: 1px solid var(--line); font-size: 15px; }
+  .seg button:last-child { border-right: 0; }
+  .seg button.on { background: var(--accent); color: var(--accent-ink); }
+
+  label { display: flex; flex-direction: column; gap: 6px; font-size: 14.5px; font-weight: 500; }
+  label.check { flex-direction: row; align-items: center; gap: 10px; font-weight: 400; }
+  textarea, input[type=text], input[type=password], select { width: 100%; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: var(--bg); }
+  textarea { resize: vertical; min-height: 90px; }
+  input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--accent); }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  .stack { display: flex; flex-direction: column; gap: 10px; }
+  .row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+  .row > * { flex: 1 1 140px; }
+  .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; flex-wrap: wrap; }
+  .actions.left { justify-content: flex-start; }
+  label.range { gap: 2px; }
+  label.range span { color: var(--muted); font-weight: 400; }
+  details { border-top: 1px solid var(--line); padding: 4px 0; }
+  details:first-of-type { border-top: 0; }
+  summary { cursor: pointer; font-weight: 600; padding: 10px 0; list-style: none; display: flex; justify-content: space-between; }
+  summary::-webkit-details-marker { display: none; }
+  summary::after { content: "▾"; color: var(--muted); }
+  details[open] summary::after { content: "▴"; }
+  details .stack { padding-bottom: 12px; }
+
+  ol { list-style: none; margin: 0; padding: 0; }
+  li.sec { font-size: 12.5px; font-weight: 600; color: var(--muted); padding: 12px 8px 4px; }
+  li.item { padding: 9px 10px; border-radius: 10px; cursor: pointer; display: flex; justify-content: space-between; gap: 10px; }
+  li.item:hover { background: var(--soft); }
+  li.item.current { background: var(--soft); outline: 2px solid var(--accent); }
+  li.item .t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  li.item .s { color: var(--muted); font-size: 13.5px; white-space: nowrap; }
+
+  .ph-now { display: flex; gap: 12px; align-items: center; }
+  .ph-now img { width: 64px; height: 64px; object-fit: cover; border-radius: 10px; border: 1px solid var(--line); }
+  .ph-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; margin-top: 12px; max-height: 60vh; overflow-y: auto; padding: 2px; }
+  .ph-grid button { padding: 0; min-height: 0; aspect-ratio: 1; overflow: hidden; border-radius: 10px; border: 2px solid transparent; background: var(--bg); }
+  .ph-grid button img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .ph-grid button.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+  .range-row { border: 1px solid var(--line); border-radius: 12px; padding: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .range-row .design { grid-column: 1 / span 2; display: flex; gap: 8px; align-items: flex-end; }
+  .range-row .design label { flex: 1; }
+  .range-row .warn { grid-column: 1 / span 2; color: var(--warn); font-size: 13.5px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chips button { min-height: 40px; padding: 6px 12px; font-size: 14.5px; }
+  .pad { display: grid; grid-template-columns: repeat(3, 64px); grid-template-rows: repeat(3, 56px); gap: 6px; justify-content: center; margin: 6px 0; }
+  .pad button { font-size: 22px; padding: 0; }
+  .pad .c { white-space: pre-line; grid-column: 2; grid-row: 2; font-size: 13px; color: var(--muted); display: grid; place-items: center; text-align: center; }
+
+  /* always-reachable slide buttons on the other tabs */
+  .mini { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; background: var(--card); border-top: 1px solid var(--line); }
+  .mini-inner { max-width: 640px; margin: 0 auto; padding: 8px 14px; display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; }
+  .mini .t { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; color: var(--muted); }
+  .savebar { position: sticky; bottom: 70px; z-index: 5; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; display: flex; align-items: center; gap: 8px; box-shadow: 0 10px 30px -18px rgba(0,0,0,.5); }
+  .savebar .note { flex: 1; margin: 0; }
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="top-inner">
+    <div class="title-row">
+      <h1>Session controls</h1>
+      <span id="conn" class="pill">Looking for the slides…</span>
+    </div>
+    <div class="tabs" role="tablist">
+      <button role="tab" data-tab="live" aria-selected="true">Live</button>
+      <button role="tab" data-tab="words">On screen</button>
+      <button role="tab" data-tab="settings">Settings</button>
+      <button role="tab" data-tab="arrange">Arrange</button>
+    </div>
+  </div>
+</div>
+
+<main>
+  <section class="card" id="share-card" hidden style="margin-bottom:14px">
+    <h2>Share with other laptops</h2>
+    <p class="note" id="share-note"></p>
+    <div class="row" style="margin-top:10px">
+      <input type="password" id="pin" placeholder="Editing PIN" autocomplete="off">
+      <button id="pin-save" style="flex:0 0 auto">Save</button>
+    </div>
+  </section>
+
+  <section class="card" id="remote-note" hidden style="margin-bottom:14px">
+    <h2>The slides aren’t open in this browser</h2>
+    <p class="note">The On screen and Settings tabs still work here; changes reach the presenting laptop within about 20 seconds. Moving between slides and arranging need this page open in the same browser as the slides.</p>
+  </section>
+
+  <!-- LIVE -->
+  <div class="panel" data-panel="live">
+    <section class="card needs-slides">
+      <span class="count" id="count"></span>
+      <div class="now-label">Now showing</div>
+      <div class="now-title" id="now-title">—</div>
+      <div class="next" id="next-wrap" hidden>
+        <div class="now-label">Next</div>
+        <div class="now-title" id="next-title"></div>
+        <div class="meta" id="next-meta"></div>
+      </div>
+      <div class="next after" id="next2-wrap" hidden>
+        <div class="now-label">After that</div>
+        <div class="now-title" id="next2-title"></div>
+        <div class="meta" id="next2-meta"></div>
+      </div>
+      <div class="nav">
+        <button data-cmd="prev" aria-label="Previous">‹ Back</button>
+        <button data-cmd="next" class="primary" aria-label="Next">Next ›</button>
+      </div>
+      <div class="tools">
+        <button data-cmd="blackout" id="btn-black">Black screen</button>
+        <button data-cmd="video" id="btn-video">Darshan video</button>
+        <button data-cmd="smaller" aria-label="Smaller text">A−</button>
+        <button data-cmd="larger" aria-label="Larger text">A+</button>
+        <button data-cmd="reload">Reload from list</button>
+      </div>
+      <p class="note" id="scroll-note" hidden>This bhajan scrolls: Next moves down through the words first.</p>
+      <p class="note" id="design-now"></p>
+    </section>
+
+    <section class="card">
+      <h2>Upcoming bhajans box</h2>
+      <div class="seg" id="next-mode">
+        <button data-mode="off">Off</button>
+        <button data-mode="one">Next</button>
+        <button data-mode="two">Next + After that</button>
+      </div>
+      <p class="note">Changes the slides straight away.</p>
+    </section>
+
+    <section class="card">
+      <h2>Swami’s photo</h2>
+      <div class="ph-now">
+        <img id="ph-thumb" alt="" hidden>
+        <div>
+          <div class="now-title" id="ph-state" style="font-size:16px">Not showing</div>
+          <div class="meta" id="ph-name"></div>
+        </div>
+      </div>
+      <div class="seg" id="ph-mode" style="margin-top:12px">
+        <button data-mode="same">Same photo on every slide</button>
+        <button data-mode="each">A different photo on each slide</button>
+      </div>
+      <div class="tools">
+        <button id="ph-toggle" class="primary">Show photo</button>
+        <button data-ph="random" class="ph-random">Random</button>
+        <button data-ph="prev" aria-label="Previous photo">‹</button>
+        <button data-ph="next" aria-label="Next photo">›</button>
+        <button id="ph-browse">Choose…</button>
+      </div>
+      <p class="note" id="ph-help"></p>
+      <div class="actions left" id="ph-unpin-row" hidden style="margin-top:4px">
+        <button id="ph-unpin">Undo the choice for this slide</button>
+      </div>
+    </section>
+
+    <section class="card needs-slides">
+      <h2>Jump to a slide</h2>
+      <ol id="list"></ol>
+    </section>
+  </div>
+
+  <!-- ON SCREEN -->
+  <div class="panel" data-panel="words" hidden>
+    <section class="card">
+      <h2>Announcements strip</h2>
+      <div class="stack">
+        <label>One announcement per line
+          <textarea id="tk-text" placeholder="e.g. Prasadam will be served in the hall after Arathi"></textarea>
+        </label>
+        <div class="row">
+          <label class="check"><input type="checkbox" id="tk-on"> Show on the slides</label>
+          <label>Speed
+            <select id="tk-speed"><option value="slow">Slow</option><option value="medium">Medium</option><option value="fast">Fast</option></select>
+          </label>
+        </div>
+      </div>
+      <div class="actions">
+        <button id="tk-hide">Hide strip</button>
+        <button id="tk-apply" class="primary">Update the slides</button>
+      </div>
+      <p class="note" id="tk-live"></p>
+    </section>
+
+    <section class="card" id="ph-card">
+      <h2>Swami’s photo</h2>
+      <p class="note" style="margin-top:0">Tap a photo to show it on the slides. The words move aside to make room; use the Arrange tab to move or resize it.</p>
+      <div class="actions left" style="margin-top:8px">
+        <button id="ph-toggle-2">Hide photo</button>
+        <button data-ph="random" class="ph-random">Random</button>
+      </div>
+      <p class="note" id="ph-help-2"></p>
+      <div class="ph-grid" id="ph-grid"><p class="note">Loading photos…</p></div>
+    </section>
+
+    <section class="card">
+      <h2>Text at the top of every slide</h2>
+      <label>For this deck only
+        <input type="text" id="banner" maxlength="80" placeholder="e.g. Global Akhanda Bhajans 2026">
+      </label>
+      <div class="actions">
+        <button id="banner-apply" class="primary">Update the slides</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Title slide</h2>
+      <div class="stack">
+        <label>Title <input type="text" id="ts-title" maxlength="120"></label>
+        <label>Line under the title <input type="text" id="ts-sub" maxlength="160"></label>
+        <label>Or a picture instead (link)
+          <input type="text" id="ts-cover" placeholder="images/akhanda-cover.png">
+        </label>
+      </div>
+      <p class="note">Leave Title or Line empty to use the center name and date from Sai Rhythms. For a slide made in Canva: download it as PNG or JPG (1920 × 1080), upload it to the <b>images</b> folder on GitHub, and type its link here, like <code>images/akhanda-cover.png</code>.</p>
+      <div class="actions">
+        <button id="ts-clear">Use the title text</button>
+        <button id="ts-show">Show the title slide</button>
+        <button id="ts-apply" class="primary">Update the slides</button>
+      </div>
+    </section>
+  </div>
+
+  <!-- SETTINGS -->
+  <div class="panel" data-panel="settings" hidden>
+    <section class="card">
+      <h2>Sai Rhythms deck</h2>
+      <label>Published deck link
+        <input type="text" id="deck-url" placeholder="https://sairhythms.sathyasai.org/song/slides/…/view">
+      </label>
+      <p class="note" id="deck-name"></p>
+      <div class="actions">
+        <button id="deck-apply" class="primary">Load this deck</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <form id="sf" onsubmit="return false">
+        <details open>
+          <summary>Darshan video</summary>
+          <div class="stack">
+            <label>YouTube links, one per line
+              <textarea name="videos" rows="3" placeholder="https://www.youtube.com/watch?v=XXXXXXXXXXX 1:20-4:05"></textarea>
+            </label>
+            <p class="note" style="margin:0">Add times after a link to use part of it, like 1:20-4:05.</p>
+            <div class="row">
+              <label>Show the video on
+                <select name="videoOn">
+                  <option value="lyrics">Bhajans and prayers</option>
+                  <option value="songs">Bhajans only</option>
+                  <option value="all">Every slide</option>
+                  <option value="off">No slides</option>
+                </select>
+              </label>
+              <label>Side
+                <select name="videoSide"><option value="left">Left</option><option value="right">Right</option></select>
+              </label>
+            </div>
+            <p class="note" style="margin:0">Framing shows live on a bhajan slide:</p>
+            <label class="range">Width <span data-v="videoWidth"></span><input type="range" name="videoWidth" min="30" max="60" step="1"></label>
+            <label class="range">Zoom <span data-v="videoZoom"></span><input type="range" name="videoZoom" min="100" max="300" step="5"></label>
+            <label class="range">Focus left to right <span data-v="videoFocusX"></span><input type="range" name="videoFocusX" min="0" max="100" step="1"></label>
+            <label class="range">Focus top to bottom <span data-v="videoFocusY"></span><input type="range" name="videoFocusY" min="0" max="100" step="1"></label>
+            <label class="range">Soft edge <span data-v="videoFeather"></span><input type="range" name="videoFeather" min="0" max="70" step="1"></label>
+          </div>
+        </details>
+        <details>
+          <summary>Design</summary>
+          <div class="stack">
+            <label>Main design <select name="template"></select></label>
+            <p class="note" style="margin:0">To use other designs for parts of the deck, see “Designs across the deck” below.</p>
+          </div>
+        </details>
+        <details>
+          <summary>Bhajan slides</summary>
+          <div class="stack">
+            <div class="row">
+              <label>When a bhajan doesn’t fit
+                <select name="longText"><option value="scroll">Scroll within the slide</option><option value="split">Continue on the next slide</option></select>
+              </label>
+              <label>Most lines per slide
+                <input type="text" inputmode="numeric" name="maxLines">
+              </label>
+            </div>
+            <label>Upcoming bhajans box
+              <select name="nextMode"><option value="two">Next and After that</option><option value="one">Next only</option><option value="off">Don’t show</option></select>
+            </label>
+            <label class="check"><input type="checkbox" name="showMeaning"> Show the meaning under each bhajan</label>
+            <label class="check"><input type="checkbox" name="showSinger"> Show the singer and pitch under the title</label>
+            <label class="check"><input type="checkbox" name="titleSlide"> Start with a title slide</label>
+            <label class="check"><input type="checkbox" name="showClock"> Show the current time</label>
+          </div>
+        </details>
+        <details>
+          <summary>Logos</summary>
+          <div class="stack">
+            <div class="row">
+              <label>First logo (link)<input type="text" name="logo1"></label>
+              <label>Where<select name="logo1Pos"><option value="top-left">Top left</option><option value="top-right">Top right</option><option value="bottom-left">Bottom left</option><option value="off">Don’t show</option></select></label>
+            </div>
+            <div class="row">
+              <label>Second logo (link)<input type="text" name="logo2"></label>
+              <label>Where<select name="logo2Pos"><option value="top-left">Top left</option><option value="top-right">Top right</option><option value="bottom-left">Bottom left</option><option value="off">Don’t show</option></select></label>
+            </div>
+            <label>Logo size
+              <select name="logoSize"><option value="small">Small</option><option value="medium">Medium</option><option value="large">Large</option></select>
+            </label>
+            <label>Behind the logos
+              <select name="logoBacking"><option value="design">As the design suggests</option><option value="on">A soft backing (helps on busy corners)</option><option value="off">Nothing</option></select>
+            </label>
+            <p class="note" style="margin:0">To move or resize a logo on a particular design, use the Arrange tab.</p>
+          </div>
+        </details>
+      </form>
+    </section>
+    <section class="card needs-slides" id="ranges-card">
+      <h2>Designs across the deck</h2>
+      <div class="seg" id="design-mode">
+        <button data-mode="whole">Same design for the whole deck</button>
+        <button data-mode="ranges">Different designs for ranges of slides</button>
+      </div>
+      <div id="ranges-box" hidden>
+        <p class="note">Pick the first and last slide of each range and its design. Slides outside every range use the main design. If ranges overlap, the lower one in the list wins. Ranges follow the slides themselves, so they stay right when the order changes on Sai Rhythms.</p>
+        <div id="ranges" class="stack" style="margin-top:10px"></div>
+        <div class="actions" style="justify-content:space-between">
+          <button id="range-add">Add a range</button>
+          <span><button id="ranges-undo">Undo</button> <button id="ranges-apply" class="primary">Apply ranges</button></span>
+        </div>
+        <p class="note" id="ranges-note"></p>
+      </div>
+    </section>
+
+    <div class="savebar">
+      <p class="note" id="sf-note">No unsaved changes.</p>
+      <button id="sf-undo">Undo</button>
+      <button id="sf-save" class="primary">Save settings</button>
+    </div>
+  </div>
+
+  <!-- ARRANGE -->
+  <div class="panel" data-panel="arrange" hidden>
+    <section class="card">
+      <h2>Arrange text and logos</h2>
+      <p class="note" style="margin-top:0">Move or resize the words, logos, top text, Next box or clock when they sit on part of the design. Each design remembers its own arrangement, for every laptop.</p>
+      <div class="actions left">
+        <button id="arrange-btn" class="primary">Start arranging</button>
+      </div>
+      <p class="note" id="arrange-off-note"></p>
+    </section>
+
+    <section class="card" id="arrange-tools" hidden>
+      <h2>1. Choose what to change</h2>
+      <div class="chips" id="arrange-chips"></div>
+      <div class="actions left">
+        <button data-arr-slide="-1">‹ Previous slide</button>
+        <button data-arr-slide="1">Next slide ›</button>
+      </div>
+      <p class="note" style="margin-top:4px">Bhajan words, information, short slides and the title slide each have their own position: move to a slide of that kind to arrange it.</p>
+
+      <h2 style="margin-top:18px">2. Move and resize</h2>
+      <div class="row" style="align-items:center">
+        <div class="seg" id="arr-step" style="flex:0 0 auto">
+          <button data-step="4" class="on">Small steps</button>
+          <button data-step="24">Big steps</button>
+        </div>
+      </div>
+      <div class="pad">
+        <span></span><button data-arr="up" aria-label="Move up">↑</button><span></span>
+        <button data-arr="left" aria-label="Move left">←</button><span class="c" id="arr-pos">—</span><button data-arr="right" aria-label="Move right">→</button>
+        <span></span><button data-arr="down" aria-label="Move down">↓</button><span></span>
+      </div>
+      <div class="tools">
+        <button data-arr="smaller">Smaller</button>
+        <button data-arr="bigger">Bigger</button>
+        <button data-arr="reset">Put back</button>
+        <button data-arr="reset-all">Reset all</button>
+      </div>
+      <p class="note">You can also drag items directly on the slides, and scroll over an item to resize it.</p>
+    </section>
+  </div>
+</main>
+
+<div class="mini" id="mini" hidden>
+  <div class="mini-inner">
+    <button data-cmd="prev" aria-label="Previous slide">‹</button>
+    <div class="t" id="mini-title"></div>
+    <button data-cmd="next" class="primary" aria-label="Next slide">Next ›</button>
+  </div>
+</div>
+
+<script src="config.js?v=2026.11.20-21"></script>
+<script>
+(() => {
+  'use strict';
+  const CFG = window.BHAJAN_CONFIG || {};
+  const RELAY = (CFG.relayUrl || '').trim();
+  const $ = s => document.querySelector(s);
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const chan = 'BroadcastChannel' in window ? new BroadcastChannel('bhajan-slides') : null;
+  const getPin = () => { try { return JSON.parse(localStorage.getItem('bs.pin.v1') || '""'); } catch { return ''; } };
+
+  const presenters = new Map();
+  let status = null;
+  let tkDirty = false, bannerDirty = false, tsDirty = false, deckDirty = false, sfDirty = false;
+
+  /* ---------- tabs ---------- */
+  let tab = localStorage.getItem('bs.ctl.tab') || 'live';
+  function showTab(t) {
+    tab = t; localStorage.setItem('bs.ctl.tab', t);
+    document.querySelectorAll('[data-tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === t)));
+    document.querySelectorAll('[data-panel]').forEach(p => { p.hidden = p.dataset.panel !== t; });
+    $('#mini').hidden = !status || t === 'live';
+    window.scrollTo(0, 0);
+  }
+  document.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
+
+  /* ---------- connection with the slides window ---------- */
+  function pickTarget() {
+    const now = Date.now();
+    for (const [id, s] of presenters) if (now - s.at > 9000) presenters.delete(id);
+    const all = [...presenters.values()];
+    all.sort((a, b) => (b.fullscreen - a.fullscreen) || (b.visible - a.visible) || (b.at - a.at));
+    return all[0] || null;
+  }
+  function send(cmd, extra = {}) { if (chan && status) chan.postMessage({ type: 'cmd', target: status.id, cmd, ...extra }); }
+
+  function renderStatus() {
+    status = pickTarget();
+    const connected = !!status, conn = $('#conn');
+    if (connected) {
+      conn.textContent = presenters.size > 1 ? (status.fullscreen ? 'Controlling the full-screen slides' : `1 of ${presenters.size} slide windows`) : 'Connected to the slides';
+      conn.className = 'pill ok';
+    } else {
+      conn.textContent = RELAY ? 'Slides not open here' : 'Open the slides in this browser';
+      conn.className = 'pill warn';
+    }
+    $('#remote-note').hidden = connected || !RELAY;
+    document.querySelectorAll('.needs-slides').forEach(e => { e.hidden = !connected; });
+    $('#mini').hidden = !connected || tab === 'live';
+    if (!connected) { if (RELAY) loadRemote(); renderArrange(); return; }
+
+    $('#count').textContent = status.total ? `${status.cur + 1} / ${status.total}` : '';
+    $('#now-title').textContent = status.title || '—';
+    $('#mini-title').textContent = status.title ? `${status.cur + 1}/${status.total} · ${status.title}` : '';
+    setNext('#next', status.next); setNext('#next2', status.next2);
+    $('#btn-black').classList.toggle('on', !!status.blackout);
+    $('#btn-black').textContent = status.blackout ? 'Black screen is on' : 'Black screen';
+    $('#btn-video').classList.toggle('on', !status.video);
+    $('#btn-video').textContent = status.video ? 'Darshan video' : 'Video is off';
+    $('#scroll-note').hidden = !status.scroll;
+    showNextMode((status.settings || {}).nextMode || 'two');
+    showTicker(status.ticker, status.banner);
+    showTitleSlide(status.titleSlide);
+    showPhoto(status.photo);
+    fillSettings(status.settings, status.templates);
+    renderDesigns();
+    if (!deckDirty) $('#deck-url').value = status.saiUrl || '';
+    $('#deck-name').textContent = status.deck ? [status.deck.name, status.deck.date].filter(Boolean).join(', ') : '';
+    renderList(); renderArrange();
+    const needPin = status.relay && (!status.hasPin || /PIN/.test(status.saveNote || ''));
+    $('#share-card').hidden = !needPin;
+    $('#share-note').textContent = status.saveNote || 'Changes made here are saved on this laptop. Enter the editing PIN once to share them with every laptop.';
+  }
+  function setNext(p, n) {
+    $(p + '-wrap').hidden = !n;
+    if (!n) return;
+    $(p + '-title').textContent = n.title;
+    $(p + '-meta').textContent = [n.singer, n.pitch ? 'pitch ' + n.pitch : ''].filter(Boolean).join(', ');
+  }
+
+  if (chan) {
+    chan.onmessage = ev => { const m = ev.data || {}; if (m.type === 'status') { presenters.set(m.id, m); renderStatus(); } };
+    const hello = () => chan.postMessage({ type: 'hello' });
+    hello(); setInterval(() => { hello(); setTimeout(renderStatus, 600); }, 3000);
+  }
+  setTimeout(renderStatus, 800);
+  showTab(tab);
+
+  document.querySelectorAll('[data-cmd]').forEach(b => b.addEventListener('click', () => send(b.dataset.cmd)));
+  document.addEventListener('keydown', e => {
+    if (e.target.matches('input, textarea, select')) return;
+    if (['ArrowRight', 'PageDown', ' '].includes(e.key) && tab !== 'arrange') { e.preventDefault(); send('next'); }
+    if (['ArrowLeft', 'PageUp'].includes(e.key) && tab !== 'arrange') { e.preventDefault(); send('prev'); }
+  });
+
+  /* ---------- Live: upcoming box ---------- */
+  function showNextMode(m) { document.querySelectorAll('#next-mode [data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === m)); }
+  document.querySelectorAll('#next-mode [data-mode]').forEach(b => b.addEventListener('click', () => {
+    showNextMode(b.dataset.mode);
+    if (sf.nextMode) sf.nextMode.value = b.dataset.mode;
+    if (status) send('settings', { settings: { nextMode: b.dataset.mode } }); else saveRemote({ settings: { nextMode: b.dataset.mode } });
+  }));
+
+  /* ---------- Live: slide list ---------- */
+  let listSig = '';
+  function renderList() {
+    const sig = JSON.stringify([status.list, status.cur]);
+    if (sig === listSig) return; listSig = sig;
+    const ol = $('#list'); ol.innerHTML = '';
+    let lastSec = null, curIdx = -1;
+    status.list.forEach((s, n) => { if (s.i <= status.cur) curIdx = n; });
+    status.list.forEach((s, n) => {
+      if (s.section && s.section !== lastSec) { const h = document.createElement('li'); h.className = 'sec'; h.textContent = s.section; ol.appendChild(h); lastSec = s.section; }
+      const li = document.createElement('li');
+      li.className = 'item' + (n === curIdx ? ' current' : '');
+      li.innerHTML = `<span class="t">${esc(s.title)}</span><span class="s">${esc(s.song ? [s.singer, s.pitch].filter(Boolean).join(', ') : (s.added ? 'added' : ''))}</span>`;
+      li.addEventListener('click', () => send('goto', { i: s.i }));
+      ol.appendChild(li);
+    });
+  }
+
+  /* ---------- On screen: announcements, top text, title slide ---------- */
+  function showTicker(t, banner) {
+    t = t || { text: '', on: false, speed: 'slow' };
+    if (!tkDirty) { $('#tk-text').value = t.text || ''; $('#tk-on').checked = !!t.on; $('#tk-speed').value = t.speed || 'slow'; }
+    if (!bannerDirty) $('#banner').value = banner || '';
+    const lines = (t.text || '').split('\n').filter(s => s.trim()).length;
+    $('#tk-live').innerHTML = t.on && lines ? `On the slides now: <b>${lines} announcement${lines === 1 ? '' : 's'}</b>, ${esc(t.speed)}` : 'The strip is not showing.';
+  }
+  let tkOnTouched = false;
+  $('#tk-text').addEventListener('input', () => { tkDirty = true; if (!tkOnTouched && $('#tk-text').value.trim()) $('#tk-on').checked = true; });
+  $('#tk-on').addEventListener('change', () => { tkDirty = true; tkOnTouched = true; });
+  $('#tk-speed').addEventListener('change', () => { tkDirty = true; });
+  $('#banner').addEventListener('input', () => { bannerDirty = true; });
+  const tickerForm = on => ({ text: $('#tk-text').value.trim(), on: on ?? $('#tk-on').checked, speed: $('#tk-speed').value });
+  $('#tk-apply').addEventListener('click', () => { const t = tickerForm(); tkDirty = false; tkOnTouched = false; status ? send('ticker', { ticker: t }) : saveRemote({ ticker: t }); });
+  $('#tk-hide').addEventListener('click', () => { $('#tk-on').checked = false; tkDirty = false; const t = tickerForm(false); status ? send('ticker', { ticker: t }) : saveRemote({ ticker: t }); });
+  $('#banner-apply').addEventListener('click', () => { bannerDirty = false; const b = $('#banner').value.trim(); status ? send('banner', { banner: b }) : saveRemote({ banner: b }); });
+
+  function showTitleSlide(t) {
+    t = t || {};
+    $('#ts-title').placeholder = t.origTitle || 'Center name from Sai Rhythms';
+    $('#ts-sub').placeholder = t.origSub || 'Date from Sai Rhythms';
+    if (tsDirty) return;
+    $('#ts-title').value = t.title || ''; $('#ts-sub').value = t.sub || ''; $('#ts-cover').value = (t.cover || '').startsWith('drive:') ? '' : (t.cover || '');
+  }
+  ['#ts-title', '#ts-sub', '#ts-cover'].forEach(s => $(s).addEventListener('input', () => { tsDirty = true; }));
+  $('#ts-apply').addEventListener('click', () => {
+    tsDirty = false;
+    const t = { title: $('#ts-title').value.trim(), sub: $('#ts-sub').value.trim(), cover: $('#ts-cover').value.trim() };
+    status ? send('titleSlide', { titleSlide: t }) : saveRemote({ titleSlide: t });
+  });
+  $('#ts-clear').addEventListener('click', () => { $('#ts-cover').value = ''; tsDirty = true; $('#ts-apply').click(); });
+  $('#ts-show').addEventListener('click', () => send('gotoTitle'));
+
+  /* ---------- Settings ---------- */
+  $('#deck-url').addEventListener('input', () => { deckDirty = true; });
+  $('#deck-apply').addEventListener('click', () => {
+    const url = $('#deck-url').value.trim();
+    if (!/^https:\/\/[^/]*sairhythms[^/]*\//i.test(url)) { $('#deck-name').textContent = 'That doesn’t look like a Sai Rhythms link.'; return; }
+    deckDirty = false; $('#deck-name').textContent = 'Loading…';
+    status ? send('deckUrl', { url }) : saveRemote({ saiUrl: url });
+  });
+
+  const sf = $('#sf');
+  const VIDEO_KEYS = ['videoSide', 'videoWidth', 'videoZoom', 'videoFocusX', 'videoFocusY', 'videoFeather'];
+  let previewing = false, lastTplSig = '';
+  function fillSettings(s, tpls) {
+    if (!s) return;
+    if (tpls) {
+      const sig = JSON.stringify(tpls);
+      if (sig !== lastTplSig) { lastTplSig = sig; sf.template.innerHTML = tpls.map(t => `<option value="${esc(t.id)}">${esc(t.name)}</option>`).join(''); }
+    }
+    if (sfDirty) return;
+    for (const el of sf.elements) {
+      if (!el.name || !(el.name in s)) continue;
+      if (el.type === 'checkbox') el.checked = !!s[el.name]; else el.value = s[el.name];
+    }
+    showRanges();
+  }
+  function showRanges() { sf.querySelectorAll('[data-v]').forEach(sp => { sp.textContent = sf[sp.dataset.v].value + '%'; }); }
+  function formSettings() { const v = {}; for (const el of sf.elements) if (el.name) v[el.name] = el.type === 'checkbox' ? el.checked : el.value; return v; }
+  function markDirty() { sfDirty = true; $('#sf-note').textContent = 'Unsaved changes.'; }
+  let pvTimer = null;
+  sf.addEventListener('input', e => {
+    if (e.target.closest('#section-designs')) return;   // section designs apply straight away
+    markDirty(); showRanges();
+    if (VIDEO_KEYS.includes(e.target.name) && status) {
+      clearTimeout(pvTimer);
+      pvTimer = setTimeout(() => { previewing = true; const v = formSettings(); send('videoPreview', { settings: Object.fromEntries(VIDEO_KEYS.map(k => [k, v[k]])) }); }, 60);
+    }
+  });
+  sf.addEventListener('change', e => { if (!e.target.closest('#section-designs')) markDirty(); });
+  $('#sf-save').addEventListener('click', async () => {
+    const v = formSettings(); sfDirty = false; previewing = false;
+    if (status) { send('settings', { settings: v }); $('#sf-note').textContent = 'Saved.'; }
+    else { $('#sf-note').textContent = 'Saving…'; await saveRemote({ settings: v }); $('#sf-note').textContent = $('#tk-live').textContent; }
+  });
+  $('#sf-undo').addEventListener('click', () => {
+    sfDirty = false; $('#sf-note').textContent = 'No unsaved changes.';
+    if (previewing) { send('videoPreviewEnd'); previewing = false; }
+    if (status) fillSettings(status.settings, status.templates); else { remoteLoaded = 0; loadRemote(); }
+  });
+
+  /* ---------- Arrange ---------- */
+  let step = 4;
+  document.querySelectorAll('#arr-step [data-step]').forEach(b => b.addEventListener('click', () => {
+    step = +b.dataset.step; document.querySelectorAll('#arr-step [data-step]').forEach(x => x.classList.toggle('on', x === b));
+  }));
+  $('#arrange-btn').addEventListener('click', () => {
+    if (!status) { $('#arrange-off-note').textContent = 'Arranging needs this page open in the same browser as the slides (on the presenting laptop).'; return; }
+    send('arrange', { on: !status.arranging });
+  });
+  let chipSig = '';
+  function renderArrange() {
+    const on = !!(status && status.arranging);
+    $('#arrange-btn').textContent = on ? 'Finish arranging' : 'Start arranging';
+    $('#arrange-btn').classList.toggle('primary', !on);
+    $('#arrange-tools').hidden = !on;
+    $('#arrange-off-note').textContent = on ? 'Outlined items on the slides can be changed.' : (status ? '' : $('#arrange-off-note').textContent);
+    if (!on) return;
+    const keys = status.arrangeKeys || [];
+    const sig = JSON.stringify([keys, status.selKey]);
+    if (sig !== chipSig) {
+      chipSig = sig;
+      $('#arrange-chips').innerHTML = keys.map(k => `<button data-key="${esc(k.key)}" class="${k.key === status.selKey ? 'on' : ''}">${esc(k.label)}</button>`).join('') || '<span class="note">Nothing to arrange on this slide.</span>';
+      $('#arrange-chips').querySelectorAll('[data-key]').forEach(b => b.addEventListener('click', () => send('arrangeSelect', { key: b.dataset.key })));
+    }
+    const o = status.arrangeSel;
+    $('#arr-pos').textContent = o ? `${Math.round((o.s || 1) * 100)}%\n${o.dx || 0}, ${o.dy || 0}` : 'pick an item';
+    document.querySelectorAll('[data-arr]').forEach(b => { b.disabled = !status.selKey && b.dataset.arr !== 'reset-all'; });
+  }
+  document.querySelectorAll('[data-arr]').forEach(b => b.addEventListener('click', () => {
+    const a = b.dataset.arr;
+    const mv = { up: [0, -step], down: [0, step], left: [-step, 0], right: [step, 0] }[a];
+    if (mv) send('arrangeMove', { dx: mv[0], dy: mv[1] });
+    if (a === 'smaller') send('arrangeMove', { ds: -0.05 });
+    if (a === 'bigger') send('arrangeMove', { ds: 0.05 });
+    if (a === 'reset') send('arrangeReset', {});
+    if (a === 'reset-all' && confirm('Put every text and logo on this design back where the design places them?')) send('arrangeReset', { all: true });
+  }));
+  document.querySelectorAll('[data-arr-slide]').forEach(b => b.addEventListener('click', () => send('arrangeSlide', { dir: +b.dataset.arrSlide })));
+
+  /* ---------- designs across the deck ---------- */
+  let rangesDraft = null, rangesDirty = false, rangeSig = '';
+  function slideOptions(sel) {
+    return (status.list || []).map(s => `<option value="${esc(s.key)}"${s.key === sel ? ' selected' : ''}>${s.i + 1} · ${esc(s.title)}</option>`).join('');
+  }
+  function designOptions(sel) {
+    return (status.templates || []).map(t => `<option value="${esc(t.id)}"${t.id === sel ? ' selected' : ''}>${esc(t.name)}</option>`).join('');
+  }
+  function renderDesigns() {
+    if (!status) return;
+    const dm = status.designMap || { mode: 'whole', ranges: [] };
+    const tpls = status.templates || [];
+    const name = id => (tpls.find(t => t.id === id) || {}).name || id;
+    $('#design-now').textContent = status.currentDesign ? 'Design on screen: ' + name(status.currentDesign) : '';
+    document.querySelectorAll('#design-mode [data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === dm.mode));
+    $('#ranges-box').hidden = dm.mode !== 'ranges';
+    if (!rangesDirty) rangesDraft = dm.ranges.map(r => ({ ...r }));
+    const sig = JSON.stringify([rangesDraft, status.list.map(s => s.key + s.i), tpls, status.rangeState, rangesDirty]);
+    if (sig === rangeSig) return; rangeSig = sig;
+    const box = $('#ranges');
+    box.innerHTML = rangesDraft.length ? rangesDraft.map((r, n) => `
+      <div class="range-row" data-n="${n}">
+        <label>From <select data-f="from">${slideOptions(r.from)}</select></label>
+        <label>To <select data-f="to">${slideOptions(r.to)}</select></label>
+        <div class="design"><label>Design <select data-f="id">${designOptions(r.id)}</select></label><button data-del aria-label="Remove this range">Remove</button></div>
+        ${!rangesDirty && status.rangeState && status.rangeState[n] === false ? '<div class="warn">A slide at one end of this range is no longer in the list. Pick its ends again.</div>' : ''}
+      </div>`).join('') : '<p class="note">No ranges yet. Add one to start.</p>';
+    box.querySelectorAll('.range-row').forEach(row => {
+      const n = +row.dataset.n;
+      row.querySelectorAll('select').forEach(s => s.addEventListener('change', () => { rangesDraft[n][s.dataset.f] = s.value; rangesDirty = true; $('#ranges-note').textContent = 'Not applied yet.'; }));
+      row.querySelector('[data-del]').addEventListener('click', () => { rangesDraft.splice(n, 1); rangesDirty = true; rangeSig = ''; renderDesigns(); $('#ranges-note').textContent = 'Not applied yet.'; });
+    });
+  }
+  document.querySelectorAll('#design-mode [data-mode]').forEach(b => b.addEventListener('click', () => {
+    send('designRanges', { mode: b.dataset.mode });
+    if (b.dataset.mode === 'ranges' && status && !(status.designMap || {}).ranges.length && !rangesDraft.length) $('#range-add').click();
+  }));
+  $('#range-add').addEventListener('click', () => {
+    const list = status ? status.list : [];
+    const here = list.filter(s => s.i <= status.cur).pop() || list[0];
+    if (!here) return;
+    const otherDesign = (status.templates || []).find(t => t.id !== (status.settings || {}).template) || (status.templates || [])[0];
+    rangesDraft.push({ from: here.key, to: here.key, id: otherDesign ? otherDesign.id : '' });
+    rangesDirty = true; rangeSig = ''; renderDesigns();
+    $('#ranges-note').textContent = 'New range starts and ends at the slide showing now. Change its ends and design, then Apply.';
+  });
+  $('#ranges-apply').addEventListener('click', () => {
+    send('designRanges', { mode: 'ranges', ranges: rangesDraft.filter(r => r.from && r.to && r.id) });
+    rangesDirty = false; rangeSig = ''; $('#ranges-note').textContent = 'Applied.';
+  });
+  $('#ranges-undo').addEventListener('click', () => { rangesDirty = false; rangeSig = ''; $('#ranges-note').textContent = ''; renderDesigns(); });
+
+  /* ---------- Swami's photo ---------- */
+  let photos = null, curPhoto = { on: false, file: '' };
+  async function loadPhotoList() {
+    if (photos) return photos;
+    try { photos = (await (await fetch('photos/index.json', { cache: 'no-store' })).json()).photos || []; }
+    catch { photos = []; }
+    renderPhotoGrid(); return photos;
+  }
+  function thumbOf(file) { const p = (photos || []).find(x => x.file === file); return p ? p.thumb : ''; }
+  function showPhoto(ph) {
+    curPhoto = ph || { on: false, file: '' };
+    const each = curPhoto.mode === 'each';
+    const shown = curPhoto.current || curPhoto.file;
+    document.querySelectorAll('#ph-mode [data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === (each ? 'each' : 'same')));
+    document.querySelectorAll('.ph-random').forEach(b => { b.textContent = each ? 'Shuffle all' : 'Random'; });
+    const help = each
+      ? (status ? 'Every slide gets its own photo. ‹ › or tapping a photo changes it for the slide showing now; Shuffle all gives every slide a new mix.' : 'Every slide gets its own photo. Choosing for a particular slide works on the presenting laptop.')
+      : 'The same photo stays on every slide until you change it.';
+    $('#ph-help').textContent = help; $('#ph-help-2').textContent = each ? 'Tapping a photo sets it for the slide showing now.' : '';
+    $('#ph-unpin-row').hidden = !(each && curPhoto.pinned && status);
+    const t = thumbOf(shown);
+    $('#ph-thumb').hidden = !t; if (t) $('#ph-thumb').src = t;
+    $('#ph-state').textContent = curPhoto.on ? 'Showing on the slides' : (curPhoto.file ? 'Hidden' : 'Not showing');
+    const n = photos ? photos.findIndex(x => x.file === shown) : -1;
+    $('#ph-name').textContent = n >= 0 ? `Photo ${n + 1} of ${photos.length}` : (photos && !photos.length ? 'No photos uploaded yet' : '');
+    $('#ph-toggle').textContent = curPhoto.on ? 'Hide photo' : 'Show photo';
+    $('#ph-toggle').classList.toggle('primary', !curPhoto.on);
+    $('#ph-toggle-2').textContent = curPhoto.on ? 'Hide photo' : 'Show photo';
+    document.querySelectorAll('#ph-grid button').forEach(b => b.classList.toggle('on', curPhoto.on && b.dataset.file === shown));
+  }
+  function renderPhotoGrid() {
+    const g = $('#ph-grid');
+    if (!photos || !photos.length) { g.innerHTML = '<p class="note">No photos found. Upload them to the <b>photos</b> folder on GitHub together with its <code>index.json</code> (see SETUP.md).</p>'; return; }
+    g.innerHTML = photos.map((p, i) => `<button data-file="${esc(p.file)}" title="Photo ${i + 1}"><img loading="lazy" src="${p.thumb}" alt="Photo ${i + 1}"></button>`).join('');
+    g.querySelectorAll('button').forEach(b => b.addEventListener('click', () => photoCmd({ file: b.dataset.file })));
+    showPhoto(curPhoto);
+  }
+  function photoCmd(m) {
+    if (status) send('photo', m);
+    else {
+      // another device: work out the new photo here, then save it through the relay
+      const list = (photos || []).map(p => p.file), ph = { ...curPhoto };
+      if (m.mode) { ph.mode = m.mode; ph.on = true; }
+      if (ph.mode === 'each' && (m.file || m.step || m.unpin)) { $('#ph-help').textContent = 'Choosing a photo for one slide works on the presenting laptop, where the current slide is known.'; return; }
+      if (ph.mode === 'each' && m.random) { ph.seed = Math.floor(Math.random() * 1e9) + 1; ph.on = true; showPhoto(ph); saveRemote({ photo: { ...ph, clearPins: true } }); return; }
+      if (m.file) { ph.file = m.file; ph.on = true; }
+      if (m.random && list.length) { ph.file = list[Math.floor(Math.random() * list.length)]; ph.on = true; }
+      if (m.step && list.length) { const i = list.indexOf(ph.file); ph.file = list[((i < 0 ? 0 : i + m.step) % list.length + list.length) % list.length]; ph.on = true; }
+      if (typeof m.on === 'boolean') { ph.on = m.on; if (ph.on && !ph.file && list.length) ph.file = list[Math.floor(Math.random() * list.length)]; }
+      showPhoto(ph); saveRemote({ photo: ph });
+    }
+  }
+  $('#ph-toggle').addEventListener('click', () => photoCmd({ on: !curPhoto.on }));
+  document.querySelectorAll('#ph-mode [data-mode]').forEach(b => b.addEventListener('click', () => photoCmd({ mode: b.dataset.mode })));
+  $('#ph-unpin').addEventListener('click', () => photoCmd({ unpin: true }));
+  $('#ph-toggle-2').addEventListener('click', () => photoCmd({ on: !curPhoto.on }));
+  document.querySelectorAll('[data-ph]').forEach(b => b.addEventListener('click', () => {
+    const a = b.dataset.ph;
+    photoCmd(a === 'random' ? { random: true } : { step: a === 'next' ? 1 : -1 });
+  }));
+  $('#ph-browse').addEventListener('click', () => { showTab('words'); setTimeout(() => $('#ph-card').scrollIntoView({ behavior: 'smooth' }), 50); });
+  loadPhotoList();
+
+  /* ---------- PIN ---------- */
+  $('#pin-save').addEventListener('click', () => {
+    const pin = $('#pin').value.trim(); if (!pin) return;
+    if (status) send('pin', { pin }); else { localStorage.setItem('bs.pin.v1', JSON.stringify(pin)); $('#share-note').textContent = 'PIN saved on this device.'; }
+    $('#pin').value = '';
+  });
+
+  /* ---------- another device: read and save through the relay ---------- */
+  const deckKey = url => String(url || '').trim().replace(/[?#].*$/, '').replace(/\/+$/, '').toLowerCase();
+  let remoteLoaded = 0;
+  async function getRemote() {
+    const res = await fetch(RELAY + (RELAY.includes('?') ? '&' : '?') + 'action=state');
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'The relay could not load the settings.');
+    return data.state || { settings: {}, decks: {} };
+  }
+  async function loadRemote() {
+    if (Date.now() - remoteLoaded < 15000) return;
+    remoteLoaded = Date.now();
+    try {
+      const s = await getRemote();
+      const st = s.settings || {};
+      const d = (s.decks || {})[deckKey(st.saiUrl || CFG.defaultSaiRhythmsUrl)] || {};
+      if (!deckDirty) $('#deck-url').value = st.saiUrl || CFG.defaultSaiRhythmsUrl || '';
+      showTicker(d.ticker, d.banner);
+      const e = (d.edits || {}).__title__ || {};
+      showTitleSlide({ title: e.title || '', sub: e.sub || '', cover: d.cover || '' });
+      showNextMode(st.nextMode || 'two');
+      showPhoto(d.photo);
+      let tpls = null; try { tpls = await (await fetch('templates/index.json', { cache: 'no-store' })).json(); } catch { }
+      fillSettings(st, tpls);
+    } catch (e) { $('#tk-live').textContent = 'Couldn’t read the shared settings: ' + e.message; }
+  }
+  async function saveRemote(change) {
+    if (!RELAY) { $('#tk-live').textContent = 'Open the slides in this browser first.'; return; }
+    const pin = getPin();
+    if (!pin) { $('#share-card').hidden = false; $('#share-note').textContent = 'Enter the editing PIN once on this device, then press Update again.'; return; }
+    $('#tk-live').textContent = 'Saving…';
+    try {
+      const s = await getRemote();
+      s.settings = s.settings || {}; s.decks = s.decks || {};
+      if (change.saiUrl) s.settings.saiUrl = change.saiUrl;
+      if (change.settings) {
+        const keep = s.settings.saiUrl, lay = s.settings.layouts;
+        Object.assign(s.settings, change.settings); s.settings.saiUrl = keep; if (lay) s.settings.layouts = lay;
+        ['videoWidth', 'videoZoom', 'videoFocusX', 'videoFocusY', 'videoFeather', 'maxLines'].forEach(k => { if (k in s.settings) s.settings[k] = +s.settings[k]; });
+      }
+      const key = deckKey(s.settings.saiUrl || CFG.defaultSaiRhythmsUrl);
+      const d = s.decks[key] = s.decks[key] || {};
+      if (change.ticker) d.ticker = change.ticker;
+      if ('banner' in change) d.banner = change.banner;
+      if (change.photo) {
+        const old = d.photo || {};
+        d.photo = { on: !!change.photo.on, file: change.photo.file || '', mode: change.photo.mode || old.mode || 'same',
+                    seed: change.photo.seed || old.seed || 1, pins: change.photo.clearPins ? {} : (old.pins || {}) };
+      }
+      if (change.titleSlide) {
+        const t = change.titleSlide, e = {};
+        if (t.title) e.title = t.title;
+        if (t.sub) e.sub = t.sub;
+        d.edits = d.edits || {};
+        if (Object.keys(e).length) d.edits.__title__ = e; else delete d.edits.__title__;
+        d.cover = t.cover || '';
+      }
+      const res = await fetch(RELAY, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action: 'saveState', pin, state: s }) });
+      const r = await res.json();
+      if (r.error === 'wrong-pin') { localStorage.removeItem('bs.pin.v1'); $('#share-card').hidden = false; $('#share-note').textContent = 'That PIN didn’t match. Enter it again.'; $('#tk-live').textContent = ''; return; }
+      if (!r.ok) throw new Error(r.error || 'unknown error');
+      remoteLoaded = 0;
+      $('#tk-live').textContent = 'Saved. The presenting laptop picks this up within about 20 seconds.';
+    } catch (e) { $('#tk-live').textContent = 'Couldn’t save: ' + e.message; }
+  }
+})();
+</script>
+</body>
+</html>
