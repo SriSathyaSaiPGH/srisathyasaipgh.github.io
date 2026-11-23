@@ -289,7 +289,7 @@
       let lyrics = clean(e.lyrics);
       if (lyrics.toLowerCase() === title.toLowerCase()) lyrics = '';
       let meaning = clean(e.meaning);
-      if (!lyrics || meaning.toLowerCase() === title.toLowerCase() || meaning.toLowerCase() === lyrics.toLowerCase()) meaning = '';
+      if (meaning.toLowerCase() === title.toLowerCase() || (lyrics && meaning.toLowerCase() === lyrics.toLowerCase())) meaning = '';
       return {
         key: base + '|' + occ[base], slot, title,
         isSong: slotDef ? slotDef.type === 's' : !!e.singername,
@@ -636,6 +636,12 @@
     return `<div class="s-lead">${it.singer ? `<span>${esc(it.singer)}</span>` : ''}${it.pitch ? `<span class="pitch">${esc(it.pitch)}</span>` : ''}</div>`;
   }
 
+  // The meaning shows under the words on the last page, for Sai Rhythms slides, slides edited
+  // here and slides added here alike (when "Show the meaning" is on).
+  function meaningHtml(p) {
+    const m = p.en.item ? p.en.item.meaning : (p.en.custom && p.en.custom.meaning);
+    return state.settings.showMeaning && m && p.pageNo === p.pageCount ? `<div class="s-meaning">${esc(m)}</div>` : '';
+  }
   function slideHtml(p, colClass) {
     const it = p.en.item, c = p.en.custom;
     const title = it ? it.title : (c.title || '');
@@ -655,9 +661,9 @@
       case 'html':
         return `<div class="col ${colClass}"><div class="panel"><h1 class="s-title">${esc(title)}</h1><div class="s-rule"></div><div class="s-html scroller">${it.html}</div></div></div>`;
       case 'prose':
-        return `<div class="col ${colClass}"><div class="panel"><h1 class="s-title">${esc(title)}</h1><div class="s-rule"></div><div class="s-prose scroller">${p.text.split(/\n+/).map(t => `<p>${esc(t)}</p>`).join('')}</div>${pageNote}</div></div>`;
+        return `<div class="col ${colClass}"><div class="panel"><h1 class="s-title">${esc(title)}</h1><div class="s-rule"></div><div class="s-prose scroller">${p.text.split(/\n+/).map(t => `<p>${esc(t)}</p>`).join('')}</div>${meaningHtml(p)}${pageNote}</div></div>`;
       case 'lyrics': {
-        const meaning = it && state.settings.showMeaning && it.meaning && p.pageNo === p.pageCount ? `<div class="s-meaning">${esc(it.meaning)}</div>` : '';
+        const meaning = meaningHtml(p);
         return `<div class="col ${colClass}"><div class="panel"><h1 class="s-title">${esc(title)}</h1>${leadHtml(it)}<div class="s-rule"></div><div class="s-lyrics scroller">${p.lines.map(l => `<div>${esc(l)}</div>`).join('')}</div>${meaning}${pageNote}</div></div>`;
       }
     }
@@ -898,6 +904,7 @@
     f.type.value = custom ? custom.type : 'text';
     f.title.value = custom ? (custom.title || '') : '';
     f.body.value = custom ? (custom.body || '') : '';
+    f.meaning.value = custom ? (custom.meaning || '') : '';
     f.image.value = custom ? (custom.image || '') : '';
     f.video.checked = custom ? custom.video !== false : true;
     f.onlyDate.checked = custom ? !!custom.onlyDate : false;
@@ -913,7 +920,7 @@
   $('#slide-dialog').addEventListener('close', () => {
     const d = $('#slide-dialog'); if (d.returnValue !== 'save' || !dialogCtx) return;
     const f = $('#slide-form');
-    const data = { type: f.type.value, title: f.title.value.trim(), body: f.body.value.replace(/\s+$/, ''), image: f.image.value.trim(), video: f.video.checked, onlyDate: f.onlyDate.checked && model && model.date ? model.date : '' };
+    const data = { type: f.type.value, title: f.title.value.trim(), body: f.body.value.replace(/\s+$/, ''), meaning: f.meaning.value.trim(), image: f.image.value.trim(), video: f.video.checked, onlyDate: f.onlyDate.checked && model && model.date ? model.date : '' };
     let target;
     if (dialogCtx.custom) { Object.assign(dialogCtx.custom, data); target = dialogCtx.custom; }
     else {
@@ -944,11 +951,11 @@
     const val = fld => typeof has[fld] === 'string' ? has[fld] : it.orig[fld];
     const show = new Set(['title']);
     if (it.kind === 'title') show.add('sub');
-    else if (it.orig.text) show.add('text');
+    else if (it.orig.text) { show.add('text'); show.add('meaning'); }
     else {
       show.add('lyrics');
       if (it.isSong) { show.add('singer'); show.add('pitch'); }
-      if (it.orig.lyrics || it.isSong) show.add('meaning');
+      show.add('meaning');
     }
     f.querySelectorAll('[data-field]').forEach(l => { l.hidden = !show.has(l.dataset.field); });
     for (const fld of EDIT_FIELDS) if (f[fld]) f[fld].value = val(fld);
