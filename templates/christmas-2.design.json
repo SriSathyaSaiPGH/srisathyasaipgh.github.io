@@ -1,0 +1,66 @@
+{
+  "name": "Christmas 2",
+  "fonts": "https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500&family=Libre+Franklin:ital,wght@0,400;0,500;0,600;1,400&display=swap",
+  "titleFont": "'Playfair Display', Georgia, serif",
+  "bodyFont": "'Libre Franklin', 'Segoe UI', Arial, sans-serif",
+  "defaultTone": "light",
+  "ink": "#22402E",
+  "soft": "#55685A",
+  "accent": "#B8323A",
+  "titleInk": "#8E1F2B",
+  "panel": "rgba(255, 255, 255, 0.66)",
+  "box": "rgba(255, 255, 255, 0.88)",
+  "strip": "rgba(31, 74, 46, 0.94)",
+  "stripInk": "#FFFFFF",
+  "rule": "rgba(34, 64, 46, 0.16)",
+  "logoBacking": true,
+  "layout": {
+    "title": {
+      "dx": 0,
+      "dy": 130,
+      "s": 0.8
+    }
+  },
+  "backgrounds": {
+    "title": [
+      {
+        "src": "christmas-2--title.jpg"
+      }
+    ],
+    "lyrics": [
+      {
+        "src": "christmas-2--garland.jpg"
+      },
+      {
+        "src": "christmas-2--white-frame.jpg"
+      },
+      {
+        "src": "christmas-2--pink-frame.jpg"
+      },
+      {
+        "src": "christmas-2--corner-garland.jpg"
+      },
+      {
+        "src": "christmas-2--baubles.jpg"
+      }
+    ],
+    "info": [
+      {
+        "src": "christmas-2--pine-left.jpg"
+      },
+      {
+        "src": "christmas-2--snowflake.jpg"
+      }
+    ],
+    "card": [
+      {
+        "src": "christmas-2--tree.jpg"
+      }
+    ],
+    "darshan": [
+      {
+        "src": "christmas-2--baubles.jpg"
+      }
+    ]
+  }
+}

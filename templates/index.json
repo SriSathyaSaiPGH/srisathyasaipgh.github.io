@@ -30,5 +30,13 @@
   {
     "id": "christmas",
     "name": "Christmas (green and gold)"
+  },
+  {
+    "id": "buddha-poornima",
+    "name": "Buddha Poornima"
+  },
+  {
+    "id": "christmas-2",
+    "name": "Christmas 2"
   }
 ]

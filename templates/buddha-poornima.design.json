@@ -1,0 +1,60 @@
+{
+  "name": "Buddha Poornima",
+  "fonts": "https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap",
+  "titleFont": "'Cinzel', Georgia, serif",
+  "bodyFont": "'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif",
+  "defaultTone": "dark",
+  "ink": "#FFF6E8",
+  "soft": "#FFD58A",
+  "accent": "#FFC24A",
+  "titleInk": "#FFE6A8",
+  "panel": "rgba(98, 36, 6, 0.5)",
+  "box": "rgba(92, 34, 6, 0.8)",
+  "strip": "rgba(78, 28, 4, 0.94)",
+  "stripInk": "#FFF6E8",
+  "rule": "rgba(255, 236, 200, 0.22)",
+  "logoBacking": true,
+  "layout": {
+    "title": {
+      "dx": -380,
+      "dy": 0,
+      "s": 0.72
+    }
+  },
+  "backgrounds": {
+    "title": [
+      {
+        "src": "buddha-poornima--title.jpg"
+      }
+    ],
+    "lyrics": [
+      {
+        "src": "buddha-poornima--lanterns.jpg"
+      },
+      {
+        "src": "buddha-poornima--temples.jpg"
+      },
+      {
+        "src": "buddha-poornima--lotus.jpg"
+      }
+    ],
+    "info": [
+      {
+        "src": "buddha-poornima--lanterns.jpg"
+      },
+      {
+        "src": "buddha-poornima--temples.jpg"
+      }
+    ],
+    "card": [
+      {
+        "src": "buddha-poornima--temples.jpg"
+      }
+    ],
+    "darshan": [
+      {
+        "src": "buddha-poornima--lanterns.jpg"
+      }
+    ]
+  }
+}
